@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Shopee Get Content",
+  "version": "1.0.0",
+  "description": "一鍵擷取蝦皮商品標題、價格、描述，下載圖片(JPG)與影片",
+  "permissions": [
+    "activeTab",
+    "clipboardWrite",
+    "clipboardRead",
+    "contextMenus",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://shopee.tw/*",
+    "https://www.shopee.tw/*",
+    "https://seller.shopee.tw/*",
+    "https://*.img.susercontent.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Shopee Get Content"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://shopee.tw/*",
+        "https://www.shopee.tw/*",
+        "https://seller.shopee.tw/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  }
+}

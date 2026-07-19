@@ -1,0 +1,174 @@
+chrome.contextMenus.removeAll(() => {
+  chrome.contextMenus.create({
+    id: 'saveAsJpg',
+    title: '另存為 .JPG',
+    contexts: ['image']
+  })
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'saveAsJpg',
+      title: '另存為 .JPG',
+      contexts: ['image']
+    })
+  })
+})
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'saveAsJpg') return
+  const url = info.srcUrl
+  try {
+    const rawTitle = (tab?.title || '')
+    const folder = safeFolderName(rawTitle.replace(/\s*\|\s*蝦皮購物\s*$/, '').trim() || 'shopee_image')
+    // 一律轉 JPG，不依賴 URL 副檔名（CDN URL 通常無副檔名，PNG 無法靠 URL 判斷）
+    const dataUrl = await toJpgDataUrl(url).catch(e => {
+      console.error('[SGC] context menu toJpgDataUrl failed:', e)
+      return null
+    })
+    if (dataUrl) {
+      await chrome.downloads.download({ url: dataUrl, filename: `${folder}/${ts()}.jpg`, conflictAction: 'uniquify' })
+    } else {
+      // 轉換失敗時，fallback 直接下載原始 URL
+      await chrome.downloads.download({ url, filename: `${folder}/${ts()}`, conflictAction: 'uniquify' })
+    }
+  } catch (e) {
+    console.error('[SGC] context menu download failed:', e)
+  }
+})
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'download') {
+    handleDownloads(msg).then(sendResponse)
+    return true
+  }
+  if (msg.action === 'fetchBlob') {
+    fetchBlobAsBase64(msg.url)
+      .then(res => sendResponse({ ok: true, data: res }))
+      .catch(err => sendResponse({ ok: false, error: err.message }))
+    return true
+  }
+  if (msg.action === 'checkPngMagic') {
+    checkPngMagic(msg.url)
+      .then(isPng => sendResponse({ isPng }))
+      .catch(() => sendResponse({ isPng: false }))
+    return true
+  }
+})
+
+function safeFolderName(raw) {
+  return raw
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/[^\w\u4e00-\u9fff_-]/g, '')
+    .substring(0, 100) || 'shopee_image'
+}
+
+function ts() { return Date.now() }
+
+async function toJpgDataUrl(url, skipPng = false) {
+  const resp = await fetch(url, { credentials: 'omit' })
+  if (!resp.ok) throw new Error(`fetch failed: ${resp.status} ${url}`)
+  const blob = await resp.blob()
+  if (skipPng && (blob.type === 'image/png' || blob.type === 'image/x-png')) {
+    throw new Error('SKIP_PNG')
+  }
+  const bitmap = await createImageBitmap(blob)
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const ctx = canvas.getContext('2d')
+  // 白色底色：PNG 透明背景轉 JPG 時不出黑底
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  const jpgBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 })
+  // Service Worker 沒有 URL.createObjectURL，也不能用 FileReader（chrome.downloads 內部會呼叫 createObjectURL）
+  // 改用 ArrayBuffer → Uint8Array → btoa 純文字 base64 data URL，完全相容 SW 環境
+  const buffer = await jpgBlob.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, bytes.length)))
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`
+}
+
+async function handleDownloads(msg) {
+  const results = []
+  const { images, videos, title } = msg
+  const safeName = safeFolderName(title || 'shopee_product')
+
+  if (Array.isArray(images)) {
+    for (let i = 0; i < images.length; i++) {
+      const url = images[i]
+      try {
+        // 一律嘗試轉 JPG，不依賴 URL 副檔名（CDN URL 通常無副檔名，無法靠 .png/.jpg 判斷）
+        // 傳入 true 於 fetch 時偵測若是 PNG 則排除不下載
+        const converted = await toJpgDataUrl(url, true).catch(e => {
+          if (e.message === 'SKIP_PNG') {
+            throw e
+          }
+          console.warn('[SGC] toJpgDataUrl failed, fallback to original url:', url, e)
+          return null
+        })
+        const downloadUrl = converted || url
+        const path = `${safeName}/images/${safeName}_${i + 1}.jpg`
+        console.log('[SGC] downloading to', path)
+        const id = await chrome.downloads.download({
+          url: downloadUrl,
+          filename: path,
+          conflictAction: 'uniquify'
+        })
+        results.push({ type: 'image', index: i, id })
+      } catch (e) {
+        if (e.message === 'SKIP_PNG') {
+          console.log('[SGC] png image skipped:', url)
+          results.push({ type: 'image', index: i, skipped: true, reason: 'PNG' })
+          continue
+        }
+        console.error('[SGC] download image failed:', e)
+        results.push({ type: 'image', index: i, error: e.message })
+      }
+    }
+  }
+
+  if (Array.isArray(videos)) {
+    for (let i = 0; i < videos.length; i++) {
+      try {
+        const id = await chrome.downloads.download({
+          url: videos[i],
+          filename: `${safeName}/videos/${safeName}_video_${i + 1}.mp4`,
+          conflictAction: 'uniquify'
+        })
+        results.push({ type: 'video', index: i, id })
+      } catch (e) {
+        results.push({ type: 'video', index: i, error: e.message })
+      }
+    }
+  }
+
+  return { success: true, results }
+}
+
+async function fetchBlobAsBase64(url) {
+  const resp = await fetch(url, { credentials: 'omit' })
+  if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${url}`)
+  const blob = await resp.blob()
+  const buffer = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, bytes.length)))
+  }
+  const base64 = btoa(binary)
+  return { base64, type: blob.type }
+}
+
+async function checkPngMagic(url) {
+  const resp = await fetch(url, { headers: { Range: 'bytes=0-3' }, credentials: 'omit' })
+  if (!resp.ok) return false
+  const buf = await resp.arrayBuffer()
+  const view = new Uint8Array(buf)
+  return view.length >= 4 && view[0] === 0x89 && view[1] === 0x50 && view[2] === 0x4E && view[3] === 0x47
+}
+
