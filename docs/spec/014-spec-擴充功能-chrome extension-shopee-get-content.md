@@ -377,7 +377,7 @@ API v4/v2 的 item get endpoint 受 Shopee WAF 保護，content script 的 fetch
 | docs/spec/012-plan-商品圖片影片與描述規範（shopee_media_description）.md | 圖片格式 JPG、影片規格 MP4/H.264、命名規則 _001 |
 | docs/spec/013-guide-蝦皮商品描述爬取（shopee_scraping）.md | Shopee WAF 阻擋、API 可用性調查 |
 | docs/spec/001-plan-商品上架流程（shopee_listing_pipeline）.md | 總體上架流程 |
-| __remo__/shopee-get-content/ | Extension 實作原始碼 |
+| extension/ | Extension 實作原始碼 |
 
 ---
 
@@ -450,7 +450,7 @@ API v4/v2 的 item get endpoint 受 Shopee WAF 保護，content script 的 fetch
 | 2026-07-18 | 1.0.12 | PNG 排除根因修正：改為下載端一律轉 JPG（不依賴 URL 副檔名）；toJpgDataUrl 加白色底色合成；fetch 失敗加 resp.ok 檢查；所有呼叫點加 .catch() 防止 APMS uncaught rejection |
 | 2026-07-19 | 1.0.13 | 品牌下拉選單與欄位自動填入修復：過濾父容器並優化滑鼠事件鏈為 mousedown -> mouseup -> click |
 | 2026-07-19 | 1.0.14 | 進階欄位填入可靠性修復：1) 類別確認按鈕限縮範圍避免誤觸；2) 類別變更後等待 1000ms 讓 Vue DOM 重新渲染穩定，解決商品描述與標題被清空問題；3) 品牌下拉選項輪詢等待最長 3s，避免非同步載入為空；4) 描述欄位直接對應 fieldIdMap 的 description |
-| 2026-07-19 | 1.0.15 | 根因確立：蝦皮 carousel virtual rendering 造成圖片不足。以 `__remo__/_000_PROVEN_rootcause_carousel_virtual_rendering.js` 驗證：初始只 render 5 個可見縮圖，其餘 4 個 DOM 不存在；點擊縮圖觸發 React 渲染完整 9 張。更新 spec §2026-07-19 根因分析、§11 修正項目 #10 |
+| 2026-07-19 | 1.0.15 | 根因確立：蝦皮 carousel virtual rendering 造成圖片不足。以 `docs/scripts/_000_PROVEN_rootcause_carousel_virtual_rendering.js` 驗證：初始只 render 5 個可見縮圖，其餘 4 個 DOM 不存在；點擊縮圖觸發 React 渲染完整 9 張。更新 spec §2026-07-19 根因分析、§11 修正項目 #10 |
 | 2026-07-19 | 1.0.16 | 修正 carousel virtual rendering 圖片不足：在 `extractFromDOM()` 前呼叫 `triggerCarouselFullRender()`（layered selector + dispatchEvent + click）觸發 React 渲染完整圖集，再以 `waitForCarouselStable()`（2×rAF → 檢查 → 500ms fallback）確保圖片穩定。新增 landing auto-trigger 讓 carousel 提前渲染。附加 landing.auto-trigger；`closeCarouselPopup` MutationObserver + Escape 關閉法失敗（列為永久放棄方向）。 |
 | 2026-07-19 | 1.0.17 | 修正 PNG 過濾漏洞：最終 filter 加入 `lower.includes('_tn')` 及 `lower.includes('_cover')` 小寫統一；`isProductImg()` badSrc 加入 `_tn` 檢查；下載層加入 PNG magic number sniffing（Content-Type 誤判時以 bytes 前 4 碼 `\x89PNG` 二次攔截）。 |
 | 2026-07-19 | 1.0.18 | 修正買家頁非 `_tn` 頭像漏網：`extractFromDOM()` general loop 開頭排除 `i9ihcI` 容器內圖片。安全理由：主圖已從 JSON-LD/API 取得，縮圖已從 `mdCA_C` gallery loop 取得。 |
@@ -605,7 +605,7 @@ data.images = data.images.filter(isProductImg)
 
 ### 背景
 
-2026-07-18 的根因分析假設 `__INITIAL_STATE__` 仍存在，但 2026-07-19 實測確認該變數已完全移除。圖片僅能透過 `extractFromDOM()` 取得。為確認 DOM 提取圖片不足的原因，撰寫診斷腳本 `__remo__/debug_auto.js` 進行對照實驗。
+2026-07-18 的根因分析假設 `__INITIAL_STATE__` 仍存在，但 2026-07-19 實測確認該變數已完全移除。圖片僅能透過 `extractFromDOM()` 取得。為確認 DOM 提取圖片不足的原因，撰寫診斷腳本 `docs/scripts/_001_diagnostic_dom_timing.js` 進行對照實驗。
 
 ### 診斷方法
 
@@ -655,7 +655,7 @@ document.querySelectorAll('.mdCA_C').forEach(el => {
 | 3 | `product.images` 只取第一個 | ❌ `__INITIAL_STATE__` 已消失，此路徑完全無效 |
 | 4 | CDN URL 無副檔名被誤殺 | ❌ 用戶確認與 PNG 過濾無關 |
 
-診斷腳本：`__remo__/debug_auto.js`
+診斷腳本：`docs/scripts/_001_diagnostic_dom_timing.js`
 
 ### 1. 批次下載時「事先排除 PNG 圖片」
 - **問題**：蝦皮圖片 CDN URL 沒有副檔名，無法單靠網址字串（如 `/\.png/i`）排除 PNG。
@@ -737,7 +737,7 @@ Popup 根據 `tab.url` 自動切換模式：
 
 #### 14.3.1 從剪貼簿填入（popup）
 ```javascript
-// S:\projects\shopee\__remo__\shopee-get-content\popup.js (initSellerMode)
+// extension/popup.js (initSellerMode)
 $('btnFill').addEventListener('click', async () => {
   raw = await navigator.clipboard.readText()
   data = JSON.parse(raw)
@@ -747,7 +747,7 @@ $('btnFill').addEventListener('click', async () => {
 
 #### 14.3.2 填入欄位（content.js）
 ```javascript
-// S:\projects\shopee\__remo__\shopee-get-content\content.js (fillAll / fillField / findFieldByLabel)
+// extension/content.js (fillAll / fillField / findFieldByLabel)
 
 function fillField(value, ...strategies) {
   for (const s of strategies) {
@@ -770,7 +770,7 @@ function findFieldByLabel(labelText) {
 
 #### 14.3.3 Vue 3 雙向綁定（content.js）
 ```javascript
-// S:\projects\shopee\__remo__\shopee-get-content\content.js (setNativeValue)
+// extension/content.js (setNativeValue)
 function setNativeValue(input, value) {
   const proto = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype, 'value'
