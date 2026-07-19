@@ -1,0 +1,222 @@
+[
+    {
+        "product_name": "Wan2.2-SVI2-Pro-remix - 2026 Ultimate NSFW Image-to-Video Tool",
+        "price_twd": 999,
+        "nsfw": true,
+        "tag": [
+            "NSFW",
+            "Video Generation",
+            "Video"
+        ],
+        "category": "Video Generation",
+        "product_description": "",
+        "ProductId": "PROD-ID-000001",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "Android Mobile AI Face Swap Tool! NSFW One-Click, Photo+Video! APP (Trial)",
+        "price_twd": 999,
+        "nsfw": true,
+        "tag": [
+            "AI",
+            "NSFW",
+            "Video Generation",
+            "Video",
+            "Face Swap",
+            "FaceSwap",
+            "APP",
+            "Mobile"
+        ],
+        "category": "Virtual Try-On/Face Swap",
+        "product_description": "",
+        "ProductId": "PROD-ID-000002",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "AI Auto-Generate Short Drama Explainers - One Sentence Input, Video Output",
+        "price_twd": 980,
+        "nsfw": false,
+        "tag": [
+            "AI",
+            "Video Generation",
+            "Video"
+        ],
+        "category": "Video Generation",
+        "product_description": "",
+        "ProductId": "PROD-ID-000003",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "LTX-2 Audio-Video Sync! Open-Source Video Model, Redefining AI Video Creation",
+        "price_twd": 960,
+        "nsfw": false,
+        "tag": [
+            "AI",
+            "Video Generation",
+            "Video"
+        ],
+        "category": "Utility",
+        "product_description": "",
+        "ProductId": "PROD-ID-000004",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "FireRed-Image-Edit - AI Image Editor, NSFW, Text Edit, Old Photo Restore, Virtual Try-On",
+        "price_twd": 999,
+        "nsfw": true,
+        "tag": [
+            "AI",
+            "NSFW",
+            "Image Generation",
+            "Image",
+            "Image Editing",
+            "Image Edit",
+            "Virtual Try-On",
+            "VTON"
+        ],
+        "category": "Virtual Try-On/Face Swap",
+        "product_description": "",
+        "ProductId": "PROD-ID-000005",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "The Most Comprehensive ComfyUI Workflow Course Online",
+        "price_twd": 460,
+        "nsfw": false,
+        "tag": [
+            "ComfyUI"
+        ],
+        "category": "Image Gen/Edit",
+        "product_description": "",
+        "ProductId": "PROD-ID-000006",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "Qwen-Image-Edit-AIO - AI Photoshop, One-Click Edit, 10s Output, Supports NSFW S-Level",
+        "price_twd": 850,
+        "nsfw": true,
+        "tag": [
+            "AI",
+            "NSFW",
+            "Image Generation",
+            "Image",
+            "Image Editing",
+            "Image Edit",
+            "All-in-One Pack",
+            "All-in-One"
+        ],
+        "category": "Image Gen/Edit",
+        "product_description": "",
+        "ProductId": "PROD-ID-000007",
+        "computer_specs": {
+            "vram_min": 0,
+            "vram_rec": 0,
+            "ram_min": 0,
+            "ram_rec": 0,
+            "disk": 0,
+            "cpu": "",
+            "power": ""
+        }
+    },
+    {
+        "product_name": "Anima V2: Anime AI Drawing Tool, Fast Character Illustrations All-in-One Pack",
+        "price_twd": 799,
+        "nsfw": false,
+        "tag": [
+            "AI",
+            "Image Generation",
+            "Image",
+            "Anime",
+            "All-in-One Pack",
+            "All-in-One",
+            "Illustration",
+            "AI Drawing"
+        ],
+        "category": "Image Gen/Edit",
+        "product_description": "Anima is a lightweight AI drawing model (text-to-image) specialized in anime-style content. It excels at anime concepts, characters, and styles, but can also produce various other non-photorealistic content. Designed for illustrations and artistic images.\n\nAnima is like an \"anime illustration expert\" AI - fast generation, beautiful style, strong control. Perfect for anime and art creation enthusiasts, but not suitable for photorealistic results.\n\nAnima V2, based on V1, adds the latest Turbo model for ultra-fast generation in just 8 steps; model switching between Base and Turbo; and Lora extension support.\n\nKey Features\n\nAnime Focus: Specializes in anime characters, scenes, and illustrations. Trained on millions of anime images plus ~800K other art images.\nNot Photorealistic: Deliberately avoids photorealism, focusing on illustration and art styles.\nMultiple Versions:\nBase: Most flexible, diverse styles, suitable for advanced users training their own LoRA.\nAesthetic: Optimized for more consistent and beautiful output, ready to use.\nTurbo: Ultra-fast generation (recommended for beginners), quality close to Aesthetic but slightly less diverse.\n\nEasy to Use: Supports ComfyUI, resolution 512x512 to 1536x1536. Prompts support Danbooru tags or natural language, mixable.\nPrompt Friendly: Supports quality tags (masterpiece, score_9), artist tags (@ prefix), safety tags, easy style and content control.\n\nApplications\n\nAnime Creation: Characters, fan art, original characters, scene illustrations.\nArt Illustration: Non-photorealistic digital painting, concept art, stylized images.\nGame/Visual Novel Development: Character sprites, backgrounds, concept art.\nQuick Iteration: Turbo mode for rapid prompt testing.\nLoRA Training: Base version for training custom style or character models.\n\nUsage:",
+        "ProductId": "PROD-ID-000008",
+        "computer_specs": {
+            "vram_min": 6,
+            "vram_rec": 10,
+            "ram_min": 8,
+            "ram_rec": 16,
+            "disk": 10,
+            "cpu": "Intel i5 / AMD Ryzen 5 or equivalent",
+        "power": "Depends on GPU (typically 500W or above)"
+        }
+    },
+    {
+        "product_name": "Pony Diffusion X NSFW Image & Video Generation 🚫 Zero Censorship, Full Control",
+        "price_twd": 1999,
+        "nsfw": true,
+        "tag": [
+            "NSFW",
+            "Image Generation",
+            "Image",
+            "Video Generation",
+            "Video",
+            "Portrait",
+            "Face Swap"
+        ],
+        "category": "Image Gen/Edit",
+        "product_description": "🔞 Break the limits! Pony Diffusion X Realistic Photo & Video Generation - Unlock Your Private World\n\nTired of AI censorship and keyword blocking? Those bold, seductive, even疯狂 private fantasies with no outlet?\n\nPony Diffusion X arrives, tearing off the fake labels! Not just an AI model, but your exclusive unlimited private studio. Built for极致 NSFW realistic portraits.\n\nWhy Pony Diffusion X is the ultimate weapon for NSFW creators:\n🚫 Zero censorship, full control\n\nCore Features:\n⚡ Prompt-to-image + face swap one-click合成\n📸 Ultra-realistic photo & video portrait style\n🎨 High-detail skin texture\n💡 Professional lighting & composition\n⚡ Fast high-quality generation\n\nLocal deployment, more创作 freedom. Supports text-to-image, image-to-image, image-to-video.\n\nBreaking all moral chains and content filters! From极致 lingerie portraits to full-body artistic nudes, from special XP to intimate interactions - Pony Diffusion X never says no. If you can imagine it, it will generate it.\n\nUltimate Realism: Enhanced skin texture algorithm eliminates plastic AI face feel. Realistic skin texture, capillary translucency, sweat droplets, and true light refraction.\n\nPrecision Anatomy: No more limb degradation. Unprecedented understanding of body structure, joint bending, and multi-person interactions.\n\nYour专属 Digital Muse: Customize from face shape, body proportions to clothing materials.\n\nWho needs it?\nPatreon/OnlyFans creators: Zero-cost virtual adult models, fast monetization.\nAdult game developers: Mass-produce consistent CG and realistic character art.\nFan artists: Convert 2D characters to realistic 3D versions.\n\n⚠️ Warning: This is a powerful, unrestricted tool\nReady to cross the forbidden line?\nUnlock Pony Diffusion X and turn every深夜 fantasy into reality!",
+        "ProductId": "PROD-ID-000181",
+        "computer_specs": {
+            "vram_min": 8,
+            "vram_rec": 12,
+            "ram_min": 8,
+            "ram_rec": 16,
+            "disk": 15,
+            "cpu": "Intel i5 / AMD Ryzen 5 or equivalent",
+            "power": "Depends on GPU (typically 500W or above)"
+        }
+    }
+]
