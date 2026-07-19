@@ -293,7 +293,12 @@ git push
 | 6 | 原 repo `__remo__/shopee-get-content/` 只剩 README.md | 原程式碼已刪除 |
 | 7 | 新專案 `chrome://extensions` 載入 `extension/` 可正常運作 | 載入無錯誤 |
 | 8 | 隱私權政策頁面可訪問 | https://a0000001.github.io/shopee-copy-product/privacy/ 正常顯示 |
-| 9 | 兩個 repo 均已 push | git log 顯示最新 commit |
+| 9 | 原 repo `docs/spec/021` 已改 stub | 內容為 redirect 訊息 |
+| 10 | 原 repo `__remo__/` 剩餘檔案檢查 | shopee-official-tool 為蝦皮官方工具，與 extension 無關，不遷移；`_000`/`_001`/`_002`/README 保留於原 repo（已拷貝至新專案） |
+| 11 | 原 repo `docs/scripts/` 檢查 | 14 個檔案皆為原 repo 自己的爬蟲/轉換腳本，與 extension 無關 |
+| 12 | 原 repo `docs/data/` 檢查 | 蝦皮素材庫（圖片/影片/AI 工具），與 extension 無關 |
+| 13 | 原 repo `scripts/`、`tests/` 檢查 | 皆與 extension 無關 |
+| 14 | 兩個 repo 均已 push | git log 顯示最新 commit |
 
 ---
 
