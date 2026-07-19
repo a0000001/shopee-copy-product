@@ -1,0 +1,8 @@
+[
+  {"name": "_sapid", "value": "YOUR_VALUE_HERE", "domain": ".shopee.tw", "path": "/"},
+  {"name": "SPC_F", "value": "YOUR_VALUE_HERE", "domain": ".shopee.tw", "path": "/"},
+  {"name": "SPC_SI", "value": "YOUR_VALUE_HERE", "domain": ".shopee.tw", "path": "/"},
+  {"name": "SPC_U", "value": "YOUR_VALUE_HERE", "domain": ".shopee.tw", "path": "/"},
+  {"name": "csrftoken", "value": "YOUR_VALUE_HERE", "domain": ".shopee.tw", "path": "/"},
+  {"name": "language", "value": "zhHant", "domain": ".shopee.tw", "path": "/"}
+]
