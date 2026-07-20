@@ -1,0 +1,123 @@
+import json, os, subprocess, sys, time, shutil
+from pathlib import Path
+
+BASE = Path(__file__).resolve().parent.parent
+CATALOG_SRC = BASE / "docs" / "data" / "product-catalog-tw.json"
+CATALOG_TEST = BASE / "docs" / "data" / "product-catalog-tw.test.json"
+SERVER = BASE / "scripts" / "local-catalog-server.py"
+
+passed = 0
+failed = 0
+errors = []
+
+
+def check(label, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+        print(f"  [PASS] {label}")
+    else:
+        failed += 1
+        errors.append(f"  [FAIL] {label}  {detail}")
+        print(f"  [FAIL] {label}  {detail}")
+
+
+def api(path, method="GET", body=None):
+    payload = BASE / "tmp-test-payload.json"
+    cmd = ["curl.exe", "-s"]
+    if method == "POST":
+        cmd += ["-X", "POST", "-H", "Content-Type: application/json"]
+        if body:
+            payload.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+            cmd += ["-d", f"@{payload}"]
+    cmd += [f"http://localhost:9801{path}"]
+    r = subprocess.check_output(cmd, encoding="utf-8", errors="replace").strip()
+    return json.loads(r) if r else {}
+
+
+# ── Step 1: Verify conversion ──
+print("=== 1. 確認目錄已轉換為新格式 ===\n")
+
+check("目錄檔案存在", CATALOG_SRC.exists())
+data = json.loads(CATALOG_SRC.read_text(encoding="utf-8"))
+check("共 181 筆", len(data) == 181)
+check("第一筆是 ps_* 格式", "ps_product_name" in data[0])
+check("ps_price 為整數", isinstance(data[0]["ps_price"], int))
+check("無舊版欄位殘留", "product_name" not in data[0] and "price_twd" not in data[0])
+check("備份檔存在", CATALOG_SRC.with_suffix(".json.bak").exists())
+check("中文未逃逸", "\\u" not in CATALOG_SRC.read_text(encoding="utf-8"))
+
+# ── Step 2: Start server and test ──
+print("\n=== 2. 測試目錄伺服器 ===\n")
+
+shutil.copy2(CATALOG_SRC, CATALOG_TEST)
+base_count = len(data)
+
+server = subprocess.Popen(
+    [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST)],
+    cwd=BASE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+)
+time.sleep(2)
+
+try:
+    r = api("/health")
+    check("健康檢查", r.get("ok") is True)
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 500, "url": "http://test/append-test", "ps_category": "100644", "ps_stock": 999}})
+    check("成功寫入", r.get("action") == "appended", str(r))
+    check("目錄大小 +1", r.get("catalog_size") == base_count + 1, str(r))
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 500, "url": "http://test/append-test", "ps_category": "100644", "ps_stock": 999}})
+    check("重複 url 跳過", r.get("action") == "skipped", str(r))
+    check("reason 含 url", "url" in r.get("reason", ""), str(r))
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 999, "url": "http://test/other-url", "ps_category": "100644", "ps_stock": 999}})
+    check("重複名稱跳過", r.get("action") == "skipped", str(r))
+    check("reason 含名稱", "名稱" in r.get("reason", ""), str(r))
+
+    r = api("/append", "POST", {"product": {"url": "http://test/no-name"}})
+    check("缺欄位錯誤", r.get("ok") is False, str(r))
+    check("錯誤訊息正確", "ps_product_name" in r.get("error", ""), str(r))
+
+    final = json.loads(CATALOG_TEST.read_text(encoding="utf-8"))
+    check(f"測試檔 = {base_count + 1} 筆", len(final) == base_count + 1, f"實際 {len(final)}")
+    check("最後一筆 url 正確", final[-1]["url"] == "http://test/append-test")
+    check("JSON 無毀損", all("ps_product_name" in item for item in final))
+
+finally:
+    server.terminate()
+    try:
+        server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        server.kill()
+    CATALOG_TEST.unlink(missing_ok=True)
+    (BASE / "tmp-test-payload.json").unlink(missing_ok=True)
+
+# ── Step 3: Verify extension code ──
+print("\n=== 3. 確認 Extension 程式碼 ===\n")
+
+popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
+check("popup.js 含 submitToCatalog", "function submitToCatalog" in popup_js)
+check("popup.js 含 loadServerUrl", "async function loadServerUrl" in popup_js)
+check("popup.js 含 btnCatalog 監聽", "btnCatalog" in popup_js)
+
+popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
+check("popup.html 含 btnCatalog", "btnCatalog" in popup_html)
+
+manifest = json.loads((BASE / "extension" / "manifest.json").read_text(encoding="utf-8"))
+check("manifest 含 options_page", "options_page" in manifest)
+check("host_permissions 含 localhost", any("localhost" in p for p in manifest.get("host_permissions", [])))
+check("permissions 含 storage", "storage" in manifest.get("permissions", []))
+
+options_html = BASE / "extension" / "options.html"
+options_js = BASE / "extension" / "options.js"
+check("options.html 存在", options_html.exists())
+check("options.js 存在", options_js.exists())
+
+# ── Results ──
+print(f"\n{'='*40}")
+print(f"通過：{passed}  失敗：{failed}")
+if errors:
+    print("\n".join(errors))
+
+sys.exit(0 if failed == 0 else 1)

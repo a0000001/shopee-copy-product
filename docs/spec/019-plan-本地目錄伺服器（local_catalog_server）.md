@@ -237,195 +237,75 @@ Options page（選項頁面）：
 
 ---
 
-## 測試流程（依序執行）
+## 測試流程
 
-### Test 1：舊目錄轉換
+### Test 1：舊目錄轉換 ✅（已完成，跳過）
 
-先用 git 確認目錄原始狀態，跑轉換，再驗證輸出。
-
+Step 1 commit `fb1cbf4` 時已執行完畢。如需驗證：
 ```powershell
-# 1.1 檢查轉換前狀態
-git diff docs/data/product-catalog-tw.json
-# 預期：無異動（或知道目前有未提交的修改）
-
-# 1.2 執行轉換
-python scripts/convert-old-catalog.py
-# 預期輸出：
-#   - 跑完無 Error
-#   - 若 category 查無對照，會列出警告清單（正常，因為舊分類多於對照表項目）
-
-# 1.3 確認備份檔存在
 Test-Path docs/data/product-catalog-tw.json.bak
-
-# 1.4 驗證格式
-python -c "
-import json
-d = json.load(open('docs/data/product-catalog-tw.json', encoding='utf-8'))
-print(f'總筆數：{len(d)}')
-assert 'ps_product_name' in d[0], '第一筆缺少 ps_product_name'
-assert 'ps_price' in d[0], '第一筆缺少 ps_price'
-assert 'ps_stock' in d[0], '第一筆缺少 ps_stock'
-assert 'ps_category' in d[0], '第一筆缺少 ps_category'
-assert isinstance(d[0]['ps_price'], int), 'ps_price 不是 int'
-print('✅ 格式正確')
-"
-
-# 1.5 確認中文未逃逸
-python -c "
-line = open('docs/data/product-catalog-tw.json', encoding='utf-8').read()
-assert '\\u' not in line, '包含 \\uXXXX 逃逸序列'
-print('✅ 中文未逃逸')
-"
-
-# 1.6 還原（選擇性，確認轉換可逆時使用）
-# Copy-Item docs/data/product-catalog-tw.json.bak docs/data/product-catalog-tw.json
+python -c "import json; d=json.load(open('docs/data/product-catalog-tw.json', encoding='utf-8')); print(f'{len(d)} 筆，ps_* 格式：{list(d[0].keys())[:5]}')"
 ```
-
-**測試結束狀態**：`product-catalog-tw.json` 全為新格式，留存 `.bak`。
 
 ---
 
-### Test 2：目錄伺服器
+### Test 2：目錄伺服器（全自動）
+
+執行以下單一指令即可跑完整個測試：
 
 ```powershell
-# 2.1 準備測試用目錄（避免污染正式檔）
-Copy-Item docs/data/product-catalog-tw.json docs/data/product-catalog-tw.test.json
-
-# 2.2 啟動伺服器（前景，保留此視窗）
-python scripts/local-catalog-server.py --catalog-path docs/data/product-catalog-tw.test.json
-# 預期輸出：[目錄伺服器] 啟動於 http://localhost:9801
-
-# 開啟另一個 PowerShell 視窗執行以下測試
+python scripts/test-catalog-server.py
 ```
 
-**第二個視窗：**
-
-```powershell
-# 2.3 健康檢查
-curl http://localhost:9801/health
-# 預期回應：{"ok": true}
-
-# 2.4 成功寫入
-curl -X POST http://localhost:9801/append `
-  -H "Content-Type: application/json" `
-  -d '{"product":{"ps_product_name":"測試商品A","ps_price":500,"url":"http://test.com/A","ps_category":"100644","ps_stock":999}}'
-# 預期：{"ok": true, "action": "appended", "catalog_size": 182}
-
-# 2.5 重複跳過（相同 url）
-curl -X POST http://localhost:9801/append `
-  -H "Content-Type: application/json" `
-  -d '{"product":{"ps_product_name":"測試商品A","ps_price":500,"url":"http://test.com/A","ps_category":"100644","ps_stock":999}}'
-# 預期：{"ok": true, "action": "skipped", "reason": "url 已存在目錄中"}
-
-# 2.6 重複跳過（相同名稱、不同 url）
-curl -X POST http://localhost:9801/append `
-  -H "Content-Type: application/json" `
-  -d '{"product":{"ps_product_name":"測試商品A","ps_price":999,"url":"http://test.com/B","ps_category":"100644","ps_stock":999}}'
-# 預期：{"ok": true, "action": "skipped", "reason": "商品名稱已存在目錄中"}
-
-# 2.7 缺少必填欄位
-curl -X POST http://localhost:9801/append `
-  -H "Content-Type: application/json" `
-  -d '{"product":{"url":"http://test.com/C"}}'
-# 預期：{"ok": false, "error": "缺少 ps_product_name"}
-
-# 2.8 確認 JSON 完整性（伺服器關閉後執行）
-python -c "
-import json
-d = json.load(open('docs/data/product-catalog-tw.json', encoding='utf-8'))
-assert len(d) == 182  # 181原始 + 1筆新增(2.4成功, 2.5跳過, 2.6跳過 → 只多加1筆)
-print(f'✅ 目錄共 {len(d)} 筆，JSON 格式正確')
-"
-```
-
-**測試結束**：Ctrl+C 停掉伺服器。還原測試資料（選擇性）。
+**涵蓋項目**：
+- 啟動伺服器 + 健康檢查
+- 成功寫入一筆新商品
+- 重複 url 跳過 + reason 檢查
+- 重複商品名稱跳過 + reason 檢查
+- 缺少必填欄位錯誤
+- 寫入後 JSON 無毀損
+- 自動清理測試檔並關閉伺服器
 
 ---
 
 ### Test 3：Extension 一鍵寫入
 
-需要先完成 Test 2（伺服器正在跑），且商品頁為真實 Shopee 頁面。
+先確保伺服器正在跑（可用 Test 2 的 script 確認），再到 Chrome 操作。
 
-```powershell
-# 3.0 確認伺服器正在背景執行
-
-# 3.1 重新載入 extension
-# Chrome → chrome://extensions → 找到「Shopee Copy Product」→ 點重新整理圖示
+**前置**：
+```
+1. Chrome → chrome://extensions → 找到「Shopee Get Content」→ 按重新整理
 ```
 
-**在瀏覽器中操作：**
-
+**操作**：
 ```
-3.2 開啟商品頁
-    - 網址：https://shopee.tw/...（任一現有商品）
-    - 等待頁面完全載入
-
-3.3 點 extension 圖示
-    - 確認 popup 正常彈出
-    - 確認庫存 input 顯示 999
-    - 確認類別下拉可選
-
-3.4 點擊「送出至目錄」
-    - 預期 toast 顯示：✅ 已寫入目錄
-    - 若該商品曾送過：⏭ 已存在，跳過
-
-3.5 驗證結果
-    - 手動打開 docs/data/product-catalog-tw.json
-    - 確認最後一筆是剛送出的商品資料
-    - 確認 `url` 欄位與當前頁面網址一致
-
-3.6 再送一次相同商品
-    - 預期 toast 顯示：⏭ 已存在，跳過
-```
-
-**伺服器未啟動時的測試：**
-
-```
-3.7 關閉伺服器（Ctrl+C 停掉）
-3.8 再次點 extension → 「送出至目錄」
-    - 預期 toast 顯示：❌ 無法連線到目錄伺服器
-    - Extension 不應崩潰或卡住
+2. 開啟任一 shopee.tw 商品頁
+3. 點 extension 圖示 → 確認庫存顯示 999、類別下拉可選
+4. 按「送出至目錄」
+   - 成功：toast 顯示 ✅ 已寫入目錄
+   - 第一次成功後，再按一次 → ⏭ url 已存在目錄中
+5. 關閉伺服器 → 再按「送出至目錄」 → ❌ 無法連線到目錄伺服器
 ```
 
 ---
 
 ### Test 4：Options page
 
-```powershell
-# 4.1 確認 manifest 已註冊 options_page
-python -c "
-import json
-m = json.load(open('extension/manifest.json'))
-assert 'options_page' in m, '缺少 options_page'
-assert 'localhost' in str(m.get('host_permissions', [])), '缺少 host_permissions'
-print('✅ manifest 設定正確')
-"
-
-# 4.2 在瀏覽器中開啟選項頁面
-# Chrome → extension 圖示右鍵 → 選項
-# 或直接開：chrome-extension://<extension-id>/options.html
-# 確認伺服器位址欄位顯示 http://localhost:9801
-
-# 4.3 修改伺服器位址
-# 改成 http://localhost:9999 → 儲存
-# 回到商品頁 → 送出至目錄 → 因伺服器不在 9801，預期連線失敗
-# 改回 http://localhost:9801 → 儲存 → 重新送出 → 預期成功
+```
+1. Chrome → extension 圖示右鍵 → 選項
+2. 確認伺服器位址欄位顯示 http://localhost:9801
+3. 改成 http://localhost:9999 → 儲存
+4. 在商品頁按「送出至目錄」→ ❌ 無法連線（因為 server 不在 9999）
+5. 改回 http://localhost:9801 → 儲存 → 再次送出 → ✅ 成功
 ```
 
 ---
 
-## 回歸測試
+### 回歸確認
 
-建置完成後確認既有功能未被破壞：
-
-```powershell
-# 5.1 擷取模式（Test A）
-# 手動：開商品頁 → extension → 「複製到剪貼簿」
-# 預期：JSON 為新格式（ps_* 欄位），陣列包裝，庫存與類別含 UI 值
-
-# 5.2 填入模式（Test B）
-# 手動：開賣家頁 → 選擇填入模式 → 貼入 JSON → 點填入
-# 預期：欄位正確填入
+```
+開商品頁 → extension → 「複製到剪貼簿」
+貼到記事本，確認 JSON 欄位名為 ps_product_name、ps_price 等 ps_* 開頭
 ```
 
 ---
