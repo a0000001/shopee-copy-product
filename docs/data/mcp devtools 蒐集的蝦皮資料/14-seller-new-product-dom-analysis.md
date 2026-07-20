@@ -24,28 +24,31 @@ document.querySelector('[data-product-edit-field-unique-id="name"] input.eds-inp
 
 ### 完整欄位 ID 對照表（選類別後渲染）
 
-| data-product-edit-field-unique-id | 欄位名稱 | 類型 | input selector |
-|---|---|---|---|
-| `name` | 商品名稱 | text input | `input.eds-input__input` |
-| `category` | 類別 | 自訂按鈕（無 input） | 無 input，需 click `.product-category-box-inner` |
-| `gtinCode` | 國際條碼 (GTIN) | text input | `input.eds-input__input` |
-| `brandAndAttributes` | 品牌 + 屬性（整組） | EDS Select 下拉 + text | 見下節 |
-| `certificationInfo` | 商品證書 | 動態載入 async | `display:none` 時不存在 |
-| `description` | 商品描述 | 富文字編輯器 | `input[type="file"]` 是圖片上傳，非描述文字 |
-| `variation` | 規格 | 動態渲染 | 無直接 input |
-| `price` | 價格 | text input（NT$ prefix） | `input.eds-input__input` |
-| `stock` | 商品數量 | text input | `input.eds-input__input` |
-| `minpq` | 最低購買數量 | text input | `input.eds-input__input` |
-| `weight` | 重量（公斤） | text input（kg suffix） | `input.eds-input__input` |
-| `dimension.width` | 包裹尺寸 - 寬 | text input（cm suffix） | `input.eds-input__input` placeholder=`寬` |
-| `dimension.length` | 包裹尺寸 - 長 | text input（cm suffix） | `input.eds-input__input` placeholder=`長` |
-| `dimension.height` | 包裹尺寸 - 高 | text input（cm suffix） | `input.eds-input__input` placeholder=`高` |
-| `dangersGoods` | 禁運品 | radio group（否/是） | `input.eds-radio__input[value="0"]` / `[value="1"]` |
-| `logistic` | 買家支付運費（物流渠道） | checkbox 群組 | `input.eds-checkbox__input` |
-| `preOrder` | 較長備貨 | radio group（否/是） | `input.eds-radio__input[value="false"]` / `[value="true"]` |
-| `condition` | 商品保存狀況 | EDS Selector（無 input） | `.eds-selector__inner`（需 click 開啟） |
-| `scheduledPublishTime` | 預約上架時間 | EDS DatePicker（無 input） | `.eds-selector`（需 click 開啟） |
-| `parentSku` | 主商品貨號 | text input | `input.eds-input__input` placeholder=`-` |
+| data-product-edit-field-unique-id | 欄位名稱 | 類型 | 必填 | Excel 對應 | input selector |
+|---|---|---|---|---|---|
+| `name` | 商品名稱 | text input | ✅ Excel必填 | `ps_product_name` | `input.eds-input__input` |
+| `category` | 類別 | 自訂按鈕 | ✅ Excel必填 | `ps_category` | 無 input，需 click `.product-category-box-inner` |
+| `gtinCode` | 國際條碼 (GTIN) | text input | ➖ | `ps_gtin_code` | `input.eds-input__input` |
+| `brandAndAttributes` | 品牌 + 屬性（整組） | EDS Select + text | ➖ | `ps_brand` | 見下節 |
+| `description` | 商品描述 | 富文字編輯器 | ➖ | `ps_product_description` | `[contenteditable="true"]` |
+| `price` | 價格 | text input（NT$ prefix） | ✅ Excel必填 | `ps_price` | `input.eds-input__input` |
+| `stock` | 商品數量 | text input | ✅ Excel必填 | `ps_stock` | `input.eds-input__input` |
+| `minpq` | 最低購買數量 | text input | ➖ | `ps_minimum_purchase_quantity` | `input.eds-input__input` |
+| `weight` | 重量（公斤） | text input（kg suffix） | ➖ | `ps_weight` | `input.eds-input__input` |
+| `dimension.width` | 包裹尺寸 - 寬 | text input（cm suffix） | ➖ | `ps_width` | `input.eds-input__input` placeholder=`寬` |
+| `dimension.length` | 包裹尺寸 - 長 | text input（cm suffix） | ➖ | `ps_length` | `input.eds-input__input` placeholder=`長` |
+| `dimension.height` | 包裹尺寸 - 高 | text input（cm suffix） | ➖ | `ps_height` | `input.eds-input__input` placeholder=`高` |
+| `dangersGoods` | 禁運品 | radio group（否/是） | ➖ | `ps_dangerous_goods` | `input.eds-radio__input[value="0"]` / `[value="1"]` |
+| `preOrder` | 較長備貨 | radio group（否/是） | ➖ | `ps_product_pre_order_dts` | `input.eds-radio__input[value="false"]` / `[value="true"]` |
+| `parentSku` | 主商品貨號 | text input | ➖ | `ps_sku_parent_short` | `input.eds-input__input` placeholder=`-` |
+| `variation` | 規格 | 動態渲染 | ➖ | `et_title_variation_1` + options | 無直接 input |
+| `installment` | 信用卡分期付款 | radio + button + Modal | ➖ | 無 Excel 欄位（賣家後台設定） | 見第十一節 |
+| `logistic` | 買家支付運費（物流渠道） | checkbox 群組 | ➖ | 無 Excel 欄位 | `input.eds-checkbox__input` |
+| `condition` | 商品保存狀況 | EDS Selector | ➖ | 無 Excel 欄位 | `.eds-selector__inner`（需 click 開啟） |
+| `scheduledPublishTime` | 預約上架時間 | EDS DatePicker | ➖ | 無 Excel 欄位 | `.eds-selector`（需 click 開啟） |
+| `certificationInfo` | 商品證書 | 動態載入 async | ➖ | 無 Excel 欄位 | `display:none` 時不存在 |
+
+> **圖示說明**：✅ Excel必填 = Shopee 大量上傳範本標記為必填；➖ = 選填，視使用者需求。無 Excel 對應的欄位為 Shopee 後台專屬設定，不上傳。
 
 ---
 
@@ -309,38 +312,62 @@ editor.dispatchEvent(new Event('input', { bubbles: true }))
 
 ---
 
-## 十、完整欄位列表（含 label 實際文字，選「電腦與周邊配件 > 軟體」後）
+## 十、完整欄位列表（含 label 實際文字 + 必填標示）
 
-| label 文字 | fieldId | 填入類型 |
-|---|---|---|
-| 商品圖片 | images | 上傳（不填） |
-| 行銷活動圖片 | promotionImages | 上傳（不填） |
-| 商品影片 | video | 上傳（不填） |
-| 商品名稱 | name | text input |
-| 類別 | category | 自訂 button（不填） |
-| 國際條碼 (GTIN) | gtinCode | text input |
-| 品牌 | brandAndAttributes（部分） | EDS Select（需 click） |
-| 保固期限 | （屬性欄位，無獨立 fieldId） | EDS Select |
-| 尺寸（長 x 寬 x 高） | （屬性欄位） | text input |
-| 包裝尺寸 | （屬性欄位） | text input + EDS Select（單位） |
-| 保固種類 | （屬性欄位） | EDS Select |
-| 軟體種類 | （屬性欄位） | EDS Select |
-| 處理系統 | （屬性欄位） | EDS Select |
-| 每組數量 | （屬性欄位） | text input |
-| 商品描述 | description | Quill 富文字 .ql-editor |
-| 價格 | price | text input（NT$ prefix） |
-| 商品數量 | stock | text input |
-| 最低購買數量 | minpq | text input |
-| 多件優惠 | （無 fieldId） | button 互動 |
-| 重量 | weight | text input（kg suffix） |
-| 包裹尺寸大小 | dimension.width/.length/.height | text input（cm suffix） |
-| 禁運品 | dangersGoods | radio（否/是）|
-| 買家支付運費 | logistic | checkbox 群組 |
-| 較長備貨 | preOrder | radio（否/是）|
-| 商品保存狀況 | condition | EDS Select（全新/二手） |
-| 預約上架時間 | scheduledPublishTime | EDS DatePicker |
-| 主商品貨號 | parentSku | text input |
-| 信用卡分期付款 | installment | radio（否/是）+ 自訂按鈕「設定期數」+ Modal |
+選「電腦與周邊配件 > 軟體」後，頁面上所有可互動欄位，依出現順序列出：
+
+### 10.1 DOM 欄位（可透過 content.js 填寫）
+
+| label 文字 | fieldId | 填入類型 | 必填 | Excel 對應 |
+|---|---|---|---|---|
+| 商品圖片 | images | 上傳（不填） | ✅ | `ps_item_cover_image` + `ps_item_image_1~8` |
+| 行銷活動圖片 | promotionImages | 上傳（不填） | ➖ | 無 |
+| 商品影片 | video | 上傳（不填） | ➖ | 無 |
+| 商品名稱 | name | text input | ✅ Excel必填 | `ps_product_name` |
+| 類別 | category | 自訂 button | ✅ Excel必填 | `ps_category` |
+| 國際條碼 (GTIN) | gtinCode | text input | ➖ | `ps_gtin_code` |
+| 品牌 | brandAndAttributes（部分） | EDS Select | ➖ | `ps_brand` |
+| 保固期限 | （屬性欄位） | EDS Select | ➖ | 無 |
+| 尺寸（長 x 寬 x 高） | （屬性欄位） | text input | ➖ | 無（非包裹尺寸） |
+| 包裝尺寸 | （屬性欄位） | text input + Select | ➖ | 無 |
+| 保固種類 | （屬性欄位） | EDS Select | ➖ | 無 |
+| 軟體種類 | （屬性欄位） | EDS Select | ➖ | 無 |
+| 處理系統 | （屬性欄位） | EDS Select | ➖ | 無 |
+| 每組數量 | （屬性欄位） | text input | ➖ | 無 |
+| 商品描述 | description | Quill 富文字 | ➖ | `ps_product_description` |
+| 價格 | price | text input（NT$ prefix） | ✅ Excel必填 | `ps_price` |
+| 商品數量 | stock | text input | ✅ Excel必填 | `ps_stock` |
+| 最低購買數量 | minpq | text input | ➖ | `ps_minimum_purchase_quantity` |
+| 多件優惠 | （無 fieldId） | button 互動 | ➖ | 無 |
+| 重量 | weight | text input（kg suffix） | ➖ | `ps_weight` |
+| 包裹尺寸大小 | dimension.width/length/height | text input（cm suffix） | ➖ | `ps_width` / `ps_length` / `ps_height` |
+| 禁運品 | dangersGoods | radio（否/是） | ➖ | `ps_dangerous_goods` |
+| 買家支付運費 | logistic | checkbox 群組 | ➖ | 無 |
+| 較長備貨 | preOrder | radio（否/是） | ➖ | `ps_product_pre_order_dts` |
+| 商品保存狀況 | condition | EDS Select | ➖ | 無 |
+| 預約上架時間 | scheduledPublishTime | EDS DatePicker | ➖ | 無 |
+| 主商品貨號 | parentSku | text input | ➖ | `ps_sku_parent_short` |
+| 信用卡分期付款 | installment | radio + button + Modal | ➖ | 無（後台設定） |
+
+### 10.2 Excel 專屬欄位（DOM 無對應，需由外部資料填入）
+
+| Excel 欄位 | 說明 | 必填 | 建議值 |
+|---|---|---|---|
+| `ps_sku_short` | SKU 編號 | ➖ | 可用 `ProductId` |
+| `ps_hs_code` | HS 稅則編碼 | ➖ | 視使用者需求 |
+| `ps_tax_code` | 稅務代碼 | ➖ | 視使用者需求 |
+| `ps_new_size_chart` | 尺寸表 | ➖ | 視使用者需求 |
+| `et_title_size_chart` | 尺寸表圖片 | ➖ | 視使用者需求 |
+| `channel_id.*` | 銷售通路 | ➖ | 視使用者需求 |
+| `ps_product_pre_order_dts_range` | 預購天數範圍 | ➖ | 視使用者需求 |
+| `ps_tool_mass_upload_sample_attr_country_origin` | 原產國 | ➖ | 臺灣（跨國物流用） |
+| `ps_tool_mass_upload_sample_attr_manufacturer_details` | 製造商資訊 | ➖ | 視使用者需求 |
+| `ps_tool_mass_upload_sample_attr_packer_details` | 包裝者資訊 | ➖ | 視使用者需求 |
+| `ps_tool_mass_upload_sample_attr_importer_details` | 進口商資訊 | ➖ | 視使用者需求 |
+| `ps_brand` | 品牌 | ➖ | 已在 DOM 中 |
+| `ps_gtin_code` | GTIN 條碼 | ➖ | 已在 DOM 中 |
+
+> **用法**：寫 content.js 時看 10.1；寫 JSON→Excel 轉換腳本時看 10.2。
 
 ---
 
