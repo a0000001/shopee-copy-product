@@ -16,6 +16,14 @@
 - `extension/diagnose-installment.js` — 設定期數流程驗證診斷腳本
 - `docs/spec/017-fix-新增賣家屬性填入與信用卡分期（seller_field_installment）.md`
 
+### 新增功能：018-spec 商品目錄 JSON → Excel 大量上傳管線
+
+- `scripts/json-to-shopee-excel.py` — 新增轉換腳本，將 `ps_*` 格式 JSON 輸出為蝦皮大量上傳 Excel（37 欄「上傳模式」sheet + 8 欄「參考欄位」sheet），支援 `--stock` 命令列覆寫（用 `is not None` 判斷，`--stock 0` 正確生效），非 `ps_*` 內部欄位跳過不輸出
+- `extension/popup.js` — `toJsonClipboard()` 改為輸出 `ps_*` 欄位名並包裝為陣列格式（`ps_product_name`、`ps_price`、`ps_stock` 等），圖片第一張填 `ps_item_cover_image`，其餘填 `ps_item_image_1..8`；新增庫存輸入讀取與類別下拉讀取；seller mode 解析 JSON 支援陣列格式
+- `extension/popup.html` — 擷取模式新增庫存 input（預設 999）、類別下拉選單（電腦>軟體）、固定尺寸說明
+- `extension/content.js` — `fillAll()` 支援新舊兩種欄位名（優先讀 `ps_product_name`、`ps_price`、`ps_product_description`、`ps_stock`、`ps_brand`，無則 fallback 舊名）；尺寸支援 `ps_length`+`ps_width`+`ps_height` 組合；`data.price` 改用 `??` 避免 falsy 陷阱
+- `018-spec` 狀態更新為 `implemented`
+
 ## 2026-07-19 (Day 1 開發尾聲)
 
 ### 專案獨立

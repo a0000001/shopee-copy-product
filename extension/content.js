@@ -1072,9 +1072,9 @@
       results.push({ field: '類別', ok: false, error: e.message })
     }
 
-    const desc = data.description || ''
-    const price = data.price || ''
-    const title = data.title || ''
+    const desc = data.ps_product_description || data.description || ''
+    const price = data.ps_price ?? data.price ?? ''
+    const title = data.ps_product_name || data.title || ''
 
     results.push({ field: '商品名稱', ...(await fillFieldAsync(title,
       () => findFieldByLabel('商品名稱'),
@@ -1103,7 +1103,8 @@
       ))})
     }
 
-    results.push({ field: '商品數量', ...(await fillFieldAsync('999',
+    const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'
+    results.push({ field: '商品數量', ...(await fillFieldAsync(stockVal,
       () => findFieldByLabel('商品數量'),
       '[data-product-edit-field-unique-id="stock"] input.eds-input__input',
       'input[placeholder*="數量"]'
@@ -1115,17 +1116,22 @@
       'input[placeholder*="最低"]'
     ))})
 
+    const brandName = data.ps_brand || 'NoBrand'
     try {
-      const brandResult = await fillBrandAsync('NoBrand')
+      const brandResult = await fillBrandAsync(brandName)
       results.push({ field: '品牌', ...brandResult })
     } catch (e) {
       results.push({ field: '品牌', ok: false, error: e.message })
     }
 
     // ── 填入屬性：尺寸（長 x 寬 x 高） ──
-    const dimension = data.dimension || ''
-    if (dimension) {
-      results.push({ field: '尺寸（長 x 寬 x 高）', ...(await fillFieldAsync(dimension,
+    const dimStr = data.dimension || (
+      data.ps_length && data.ps_width && data.ps_height
+        ? `${data.ps_length}x${data.ps_width}x${data.ps_height}`
+        : ''
+    )
+    if (dimStr) {
+      results.push({ field: '尺寸（長 x 寬 x 高）', ...(await fillFieldAsync(dimStr,
         () => findFieldByLabel('尺寸（長 x 寬 x 高）'),
         async () => {
           const attrSection = document.querySelector('[data-product-edit-field-unique-id="brandAndAttributes"]')

@@ -1,6 +1,6 @@
 ---
 type: spec
-status: draft
+status: implemented
 updated: 2026-07-20
 domain: shopee
 tags: [product-catalog, json, excel, mass-upload, multi-store]

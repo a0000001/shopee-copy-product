@@ -58,7 +58,8 @@ function initSellerMode(tab) {
 
     let data
     try {
-      data = JSON.parse(raw)
+      const parsed = JSON.parse(raw)
+      data = Array.isArray(parsed) ? parsed[0] : parsed
     } catch {
       data = { title: raw }
     }
@@ -98,17 +99,57 @@ function initSellerMode(tab) {
   })
 }
 
+const CATEGORY_MAP = {
+  '電腦與周邊配件 > 軟體': '100644,101937',
+}
+
+function getSelectedCategory() {
+  const sel = $('ps_category')
+  return sel ? sel.value : ''
+}
+
+function getStockValue() {
+  const input = $('ps_stock')
+  if (!input) return 999
+  const v = parseInt(input.value, 10)
+  return isNaN(v) ? 999 : v
+}
+
 function toJsonClipboard(data) {
-  return JSON.stringify({
-    title: data.title || '',
-    price: data.price || '',
-    description: data.description || '',
+  const stock = getStockValue()
+  const catIds = getSelectedCategory()
+
+  const images = data.images || []
+  const psImages = {}
+  if (images.length > 0) {
+    psImages.ps_item_cover_image = images[0]
+  }
+  for (let i = 1; i < Math.min(images.length, 9); i++) {
+    psImages[`ps_item_image_${i}`] = images[i]
+  }
+
+  const output = {
+    ps_product_name: data.title || '',
+    ps_price: data.price ?? '',
+    ps_product_description: data.description || '',
+    ps_stock: stock,
+    ps_category: catIds,
+    ps_length: 10,
+    ps_width: 10,
+    ps_height: 4,
+    ps_sku_short: data.ProductId || '',
+    ps_brand: 'NoBrand',
+    ...psImages,
     url: data.url || '',
-    images: data.images || [],
     videos: data.videos || [],
-    dimension: '10x10x4',
-    installment: 24
-  }, null, 2)
+    installment: 24,
+  }
+
+  if (data.computer_specs) {
+    output.computer_specs = data.computer_specs
+  }
+
+  return JSON.stringify([output], null, 2)
 }
 
 function initExtractMode(tab) {
