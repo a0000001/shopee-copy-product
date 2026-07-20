@@ -170,14 +170,20 @@ Response（錯誤）：
 {"ok": false, "error": "缺少 ps_product_name"}
 ```
 
-**重複判斷邏輯**（依序比對，任一符合即跳過）：
-1. 送入商品的 `ps_sku_short` 非空 **且** 目錄中同筆的 `ps_sku_short` 也非空，且兩者相同（兩者皆空時不比對，跳下一條規則）
-2. `url` 非空且與目錄中任一筆的 `url` 相同
-3. `ps_product_name` 與目錄中任一筆的 `ps_product_name` 完全相同
+**重複判斷邏輯**（依序比對，回傳第一個符合的結果）：
 
-**reason 回應**：依實際觸發的規則動態產生文字（如 `"ps_sku_short 已存在目錄中"` / `"url 已存在目錄中"` / `"商品名稱已存在目錄中"`），方便除錯。
+1. `ps_sku_short` 非空 **且** 目錄中同筆的 `ps_sku_short` 也非空，且兩者相同（兩者皆空時不比對，跳下一條規則） → `skipped`
+2. 將 `url` 正規化為 `shop_id:item_id` 後比對（從 `/product/{shop_id}/{item_id}` 或 `-i.{shop_id}.{item_id}` 抽出），抽不到時退回去掉 query string 比對 path → `skipped`
+3. `ps_product_name` 與目錄中任一筆完全相同 → `skipped`
+4. `ps_product_name` 與目錄中任一筆相似度 >= 0.85（`difflib.SequenceMatcher`）但非完全相同 → `appended_with_warning`，資料仍寫入，但 reason 提示「與現有商品「XXX」名稱相似，請確認」
 
-**比對方式**：目前採用 exact match（完全相等），不處理 URL 參數差異或名稱模糊比對。同一商品因追蹤參數不同（`?sp=123`）可能被重複寫入，這屬於已知限制。
+**response 三種 action**：
+
+| action | 意義 |
+|--------|------|
+| `appended` | 無重複，已寫入 |
+| `appended_with_warning` | 已寫入，但名稱與目錄中某筆相似，請人工確認 |
+| `skipped` | 偵測到重複，跳過不寫入 |
 
 **smoke test**：
 ```powershell
@@ -236,7 +242,7 @@ Options page（選項頁面）：
 | 無 git commit | 寫入 JSON 後不自動版本控制 |
 | 無「更新既有商品」API | 目錄視為唯讀累加，若需修正既有資料請手動編輯 JSON（刻意設計） |
 | category 中文→ID 對照表 | 目前只有「電腦與周邊配件 > 軟體 = 100644,101937」，日後手動補 |
-| 去重比對為 exact match | url 和商品名稱均採完全相等比對，無法處理參數差異（`?sp=123`）或名稱微調（v1 vs v2），屬於刻意簡化，日後有需求再補模糊比對 |
+| 去重比對：名稱相似度門檻 | 0.85 為起始值，若實際使用發現太敏感或太遲鈍可調整 `SIMILARITY_THRESHOLD`；門檻設太高可能漏接近似商品，設太低可能誤擋合法新商品 |
 
 ---
 

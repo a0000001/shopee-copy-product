@@ -1,15 +1,28 @@
 import argparse
 import json
 import os
-import tempfile
+import re
+from difflib import SequenceMatcher
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_CATALOG = PROJECT_DIR / "docs" / "data" / "product-catalog-tw.json"
+SIMILARITY_THRESHOLD = 0.85
 
 catalog_path: Path = DEFAULT_CATALOG
+
+
+def canonical_product_id(url):
+    m = re.search(r'/product/(\d+)/(\d+)', url) or re.search(r'-i\.(\d+)\.(\d+)', url)
+    if m:
+        return f"{m.group(1)}:{m.group(2)}"
+    return url.split('?')[0]
+
+
+def is_similar(a, b, threshold=SIMILARITY_THRESHOLD):
+    return SequenceMatcher(None, a, b).ratio() >= threshold
 
 
 def load_catalog():
@@ -29,19 +42,28 @@ def check_duplicate(product, catalog):
     url = product.get("url", "").strip()
     name = product.get("ps_product_name", "").strip()
 
+    url_id = canonical_product_id(url) if url else ""
+
     for existing in catalog:
         existing_sku = existing.get("ps_sku_short", "").strip()
         existing_url = existing.get("url", "").strip()
         existing_name = existing.get("ps_product_name", "").strip()
 
         if sku and existing_sku and sku == existing_sku:
-            return "ps_sku_short 已存在目錄中"
-        if url and existing_url and url == existing_url:
-            return "url 已存在目錄中"
-        if name and existing_name and name == existing_name:
-            return "商品名稱已存在目錄中"
+            return "skipped", "ps_sku_short 已存在目錄中", None
 
-    return None
+        if url_id and existing_url:
+            existing_url_id = canonical_product_id(existing_url)
+            if url_id == existing_url_id:
+                return "skipped", "url 已存在目錄中", None
+
+        if name and existing_name:
+            if name == existing_name:
+                return "skipped", "商品名稱已存在目錄中", None
+            if is_similar(name, existing_name):
+                return "appended_with_warning", f"與現有商品「{existing_name}」名稱相似，請確認", None
+
+    return None, None, None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -88,22 +110,21 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         catalog = load_catalog()
-        reason = check_duplicate(product, catalog)
-        if reason:
-            self._send_json(200, {
-                "ok": True,
-                "action": "skipped",
-                "reason": reason,
-            })
+        action, reason, _ = check_duplicate(product, catalog)
+
+        if action == "skipped":
+            self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
             return
 
         catalog.append(product)
         save_catalog(catalog)
-        self._send_json(200, {
-            "ok": True,
-            "action": "appended",
-            "catalog_size": len(catalog),
-        })
+
+        resp = {"ok": True, "action": "appended", "catalog_size": len(catalog)}
+        if action == "appended_with_warning":
+            resp["action"] = "appended_with_warning"
+            resp["reason"] = reason
+
+        self._send_json(200, resp)
 
     def log_message(self, format, *args):
         print(f"[{self.client_address[0]}] {args[0]} {args[1]} {args[2]}")

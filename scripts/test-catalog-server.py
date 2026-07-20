@@ -75,13 +75,25 @@ try:
     check("重複名稱跳過", r.get("action") == "skipped", str(r))
     check("reason 含名稱", "名稱" in r.get("reason", ""), str(r))
 
+    # ── Canonical URL: same shop/item id, different query params ──
+    r = api("/append", "POST", {"product": {"ps_product_name": "第二件商品", "ps_price": 300, "url": "https://shopee.tw/product/12345/67890?sp=abc", "ps_category": "100644", "ps_stock": 50}})
+    check("新商品成功寫入", r.get("action") == "appended", str(r))
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "第二件商品複製", "ps_price": 300, "url": "https://shopee.tw/product/12345/67890?sp=xyz&ref=ad", "ps_category": "100644", "ps_stock": 50}})
+    check("相同 shop/item id 跳過", r.get("action") == "skipped", str(r))
+    check("reason 含 url", "url" in r.get("reason", ""), str(r))
+
+    # ── Similar name (appended_with_warning) ──
+    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品X", "ps_price": 600, "url": "http://test/similar-name", "ps_category": "100644", "ps_stock": 999}})
+    check("相似名稱仍寫入", r.get("action") == "appended_with_warning", str(r))
+    check("reason 含提示", "名稱相似" in r.get("reason", ""), str(r))
+
     r = api("/append", "POST", {"product": {"url": "http://test/no-name"}})
     check("缺欄位錯誤", r.get("ok") is False, str(r))
     check("錯誤訊息正確", "ps_product_name" in r.get("error", ""), str(r))
 
     final = json.loads(CATALOG_TEST.read_text(encoding="utf-8"))
-    check(f"測試檔 = {base_count + 1} 筆", len(final) == base_count + 1, f"實際 {len(final)}")
-    check("最後一筆 url 正確", final[-1]["url"] == "http://test/append-test")
+    check(f"測試檔 = {base_count + 3} 筆", len(final) == base_count + 3, f"實際 {len(final)}")
     check("JSON 無毀損", all("ps_product_name" in item for item in final))
 
 finally:

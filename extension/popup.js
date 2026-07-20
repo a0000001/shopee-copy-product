@@ -28,6 +28,8 @@ async function submitToCatalog(data) {
     const result = await resp.json()
     if (result.ok && result.action === 'appended') {
       showToast('✅ 已寫入目錄')
+    } else if (result.ok && result.action === 'appended_with_warning') {
+      showToast('⚠️ ' + (result.reason || '已寫入，但名稱相似'))
     } else if (result.ok && result.action === 'skipped') {
       showToast('⏭ ' + result.reason)
     } else {
