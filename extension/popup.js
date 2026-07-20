@@ -1,5 +1,43 @@
 const $ = id => document.getElementById(id)
 
+const DEFAULT_SERVER = 'http://localhost:9801'
+
+let _serverUrl = DEFAULT_SERVER
+
+async function loadServerUrl() {
+  try {
+    const result = await chrome.storage.sync.get('serverUrl')
+    if (result.serverUrl) {
+      _serverUrl = result.serverUrl.replace(/\/+$/, '')
+    }
+  } catch {
+    // 無 storage 權限或首次使用，維持預設
+  }
+}
+
+async function submitToCatalog(data) {
+  const json = toJsonClipboard(data)
+  const product = JSON.parse(json)[0]
+
+  try {
+    const resp = await fetch(`${_serverUrl}/append`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product }),
+    })
+    const result = await resp.json()
+    if (result.ok && result.action === 'appended') {
+      showToast('✅ 已寫入目錄')
+    } else if (result.ok && result.action === 'skipped') {
+      showToast('⏭ ' + result.reason)
+    } else {
+      showToast('❌ ' + (result.error || '伺服器錯誤'))
+    }
+  } catch (e) {
+    showToast('❌ 無法連線到目錄伺服器')
+  }
+}
+
 function showToast(msg) {
   const t = $('toast')
   t.textContent = msg
@@ -161,6 +199,12 @@ function initExtractMode(tab) {
     showError('通訊失敗：' + e.message)
   })
 
+  $('btnCatalog').addEventListener('click', async () => {
+    const data = window._sgcData
+    if (!data) { showToast('無資料'); return }
+    await submitToCatalog(data)
+  })
+
   $('btnCopy').addEventListener('click', async () => {
     const data = window._sgcData
     if (!data) { showToast('無資料'); return }
@@ -206,6 +250,8 @@ function initExtractMode(tab) {
 }
 
 async function main() {
+  await loadServerUrl()
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab) { showError('無法取得目前分頁'); return }
 

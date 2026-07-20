@@ -28,23 +28,15 @@ tags: [product-catalog, json, excel, mass-upload, multi-store]
   （stock 預設 999 可改、category 可選、dimension 固定 10x10x4）
         │
         ▼
-  使用者按「複製 JSON」→ 貼入 product-catalog-tw.json
+  使用者按「複製 JSON」→ 切換至編輯器
+        │
+        ▼
+  手動貼入 docs/data/product-catalog-tw.json
+  注意：extension 無法自動寫入本機檔案（見 #architectural-limitations）
+  需自行確認 ProductId 不重複
         │
         ▼
   重複 N 次 → JSON 目錄累積完成 ✅
-
-自動上傳階段（高雄店）
-  product-catalog-tw.json
-        │
-        ▼
-  json-to-shopee-excel.py（尚不存在）
-  套用欄位對應規則 → 補預設值
-        │
-        ▼
-  shopee-mass-upload-kaohsiung.xlsx
-        │
-        ▼
-  Shopee 賣家後台 → 大量上傳 → 高雄店上架完成 ✅
 ```
 
 JSON 目錄的優勢：
@@ -104,6 +96,22 @@ JSON 目錄的優勢：
 | `ps_tool_mass_upload_sample_attr_manufacturer_details` | 製造商資訊 | |
 | `ps_tool_mass_upload_sample_attr_packer_details` | 包裝者資訊 | |
 | `ps_tool_mass_upload_sample_attr_importer_details` | 進口商資訊 | |
+
+---
+
+### #architectural-limitations
+已知架構限制
+
+| 限制 | 說明 | 影響 |
+|------|------|------|
+| **Extension 無法寫入本機檔案** | Chrome Extension 基於安全沙箱，無法直接讀寫使用者本機任意檔案路徑 | JSON 目錄的累積無法自動化，需使用者手動把剪貼簿內容貼入 `product-catalog-tw.json` |
+| **無重複檢查機制** | Extension 無法讀取本機目錄檔，因此無法比對新抓的商品是否已存在 | 手動貼入時需使用者自行確認不重複；或由 scripts 端比對 ProductId 做去重 |
+| **無自動化累積管線** | 如上所述，無本地 server 或 options page 指定檔案路徑前，無法實現一鍵附加 | 所有商品目錄累積均需手動編輯 JSON |
+
+**未來優化方向**（目前不實作）：
+- Options page + `chrome.fileSystem` API：讓使用者指定目錄檔路徑，extension 可自動讀/寫
+- 本地輕量 HTTP server：接收 extension POST 的 JSON 資料後自動附加至檔案
+- GitHub/Gist 同步：直接寫入遠端儲存
 
 ---
 
@@ -374,7 +382,11 @@ scripts/json-to-shopee-excel.py
   （編輯 stock、選 category）
         │
         ▼
-  按「複製 JSON」→ 貼入 product-catalog-tw.json
+  按「複製 JSON」→ 切換至編輯器
+        │
+  手動貼入 docs/data/product-catalog-tw.json
+  ⚠ extension 無法自動寫入本機檔案，需手動貼
+  ⚠ 請自行確認 ProductId 不重複
         │
   重複 N 次，累積目錄
         │
@@ -394,6 +406,93 @@ product-catalog-en.json → shopee-mass-upload-en.xlsx（英文站）
 product-catalog-ms.json → shopee-mass-upload-ms.xlsx（馬來站）
 product-catalog-tw.json → shopee-mass-upload-tw.xlsx（台灣站）
 ```
+
+---
+
+## 測試驗證
+
+### Test A：Extension 擷取→JSON 輸出（商品頁面）
+
+```
+前置：Chrome 載入開發者模式 extension
+      開啟任一 shopee.tw 商品頁（非賣家後台）
+```
+
+1. 點 extension icon → 彈出 popup，顯示商品標題/價格/描述/圖片
+2. 確認 popup 出現新的「庫存」欄位（預設 999）和「類別」下拉選單
+3. **類別下拉**：點開應看到「電腦與周邊配件 > 軟體」選項
+4. **庫存編輯**：可改成其他數字（如 50）
+5. 按「**複製到剪貼簿**」→ 貼到任何文字編輯器
+6. 驗證輸出格式：
+   - 最外層是 `[ ]` 陣列
+   - 欄位名為 `ps_product_name`、`ps_price`、`ps_stock`、`ps_category` 等 `ps_*` 開頭
+   - 第一張圖片在 `ps_item_cover_image`，其餘在 `ps_item_image_1..N`
+   - `ps_length`、`ps_width`、`ps_height` 固定為 10、10、4
+   - `installment`、`url`、`videos` 也存在但不輸出到 Excel（非 `ps_*`）
+7. **成功條件**：JSON 格式符合 `#recommended-json-schema`
+
+### Test B：Seller 頁面填入（賣家後台）
+
+```
+前置：複製一份 Test A 產生的 JSON 到剪貼簿
+      開啟 seller.shopee.tw 新增商品頁
+      先手動選好類別（欄位才會出現）
+```
+
+1. 點 extension icon → 彈出「賣家編輯頁 — 填入模式」
+2. 按「**從剪貼簿填入**」
+3. 驗證欄位填入：
+   - 商品名稱 ✅
+   - 價格 ✅
+   - 商品描述 ✅
+   - 商品數量（應為 JSON 中的 `ps_stock` 值，不是硬編碼 999）
+   - 最低購買數量 = 1
+   - 品牌 = NoBrand
+   - 尺寸 = 10x10x4
+4. **成功條件**：所有欄位填入正確，無錯誤訊息
+
+### Test C：`--stock 0` 覆寫（命令列）
+
+```powershell
+# 準備測試 JSON
+python -c "import json; json.dump([{\"ps_product_name\":\"測試\",\"ps_price\":500,\"ps_stock\":10}], open('tmp-test.json','w',encoding='utf-8'))"
+
+# 測試 --stock 0（確認不會被當成沒下參數）
+python scripts/json-to-shopee-excel.py tmp-test.json --stock 0 -o tmp-test.xlsx
+
+# 驗證 Excel 中的庫存 = 0
+python -c "from openpyxl import load_workbook; wb=load_workbook('tmp-test.xlsx'); print('stock:', wb['上傳模式'].cell(2,14).value)"
+```
+5. **成功條件**：顯示 `stock: 0`
+6. 清理：`Remove-Item tmp-test.json, tmp-test.xlsx`
+
+### Test D：Python 腳本完整轉換
+
+```powershell
+# 用現有目錄測試
+python scripts/json-to-shopee-excel.py docs/data/product-catalog-tw.json -o tmp-catalog.xlsx
+
+# 確認輸出
+python -c "from openpyxl import load_workbook; wb=load_workbook('tmp-catalog.xlsx'); print('sheets:', wb.sheetnames); print('上傳模式 rows:', wb['上傳模式'].max_row-1); print('參考欄位 rows:', wb['參考欄位'].max_row-1)"
+```
+7. **成功條件**：兩個 sheet 都存在，行數 = JSON 商品數
+8. 清理：`Remove-Item tmp-catalog.xlsx`
+
+### Test E（選測）：舊格式相容性
+
+```powershell
+# 用舊格式 JSON 執行填入（模擬剪貼簿內容為舊格式的情況）
+# 在 seller 頁 F12 Console 貼入：
+```
+
+```js
+// 模擬舊格式 JSON 被貼入 seller 頁面
+const oldJson = JSON.stringify({ title: '舊格式商品', price: '500', description: '測試', dimension: '10x10x4' });
+navigator.clipboard.writeText(oldJson).then(() => console.log('已複製舊格式 JSON'));
+```
+
+9. 按 extension → 「從剪貼簿填入」→ 應該仍能正確填入（向後相容）
+10. **成功條件**：欄位填入無誤，無錯誤訊息
 
 ---
 

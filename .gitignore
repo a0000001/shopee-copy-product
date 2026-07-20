@@ -17,6 +17,9 @@ node_modules/
 # Extension packaging
 *.zip
 
+# Backup files
+*.bak
+
 # Product images (not committed)
 docs/data/蝦皮商品圖稿/
 docs/data/蝦皮商品圖稿（不進git）.md

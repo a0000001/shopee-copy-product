@@ -2,6 +2,24 @@
 
 > 本文件記錄 Shopee Copy Product 所有歷史變更。2026-07-19 前之紀錄由原 repo (`S:\projects\shopee`) git history 遷移整理，commit hash 保留供交叉參考。
 
+## 2026-07-21
+
+### 新增功能：019 本地目錄伺服器 — Extension 一鍵寫入商品目錄
+
+- `scripts/convert-old-catalog.py` — 一次性轉換腳本：181 筆舊格式（`product_name`、`price_twd`）轉為新格式（`ps_product_name`、`ps_price`），自動備份 `.bak`，支援重複執行保護，查無類別對照時留空並印警告清單
+- `scripts/local-catalog-server.py` — 本地 HTTP 伺服器（Python http.server，零依賴），接收 extension POST 的商品資料，三層去重比對（`ps_sku_short`→`url`→`ps_product_name`）後自動附加至目錄 JSON；支援 `--catalog-path` 參數指向測試檔案；CORS 跨源、原子寫入（先寫 `.tmp` 再 `os.replace`）、`ensure_ascii=False` 中文不逃逸
+- `extension/popup.js` — 新增 `submitToCatalog()` 按鈕邏輯，從 `chrome.storage.sync` 讀取伺服器位址，POST 後顯示對應 toast（已寫入 / 已存在跳過 / 無法連線）
+- `extension/popup.html` — 新增「送出至目錄」按鈕
+- `extension/options.html` + `options.js` — 選項頁面，可修改目錄伺服器位址（預設 `http://localhost:9801`），存入 `chrome.storage.sync`
+- `extension/manifest.json` — 註冊 `options_page`、`http://localhost/*` host_permissions、`storage` 權限
+- `docs/data/product-catalog-tw.json` — 181 筆已轉換為新格式
+- `docs/spec/019-plan-本地目錄伺服器（local_catalog_server）.md` — 完整實作計畫含測試流程
+- `docs/spec/018-spec-商品目錄JSON結構與大量上傳對應（product_catalog_structure）.md` — 補充 `#architectural-limitations` 架構限制段落 + Test A~E 驗證步驟
+
+### 修正
+
+- `019-plan` — 去重規則補上空字串陷阱防護（兩側皆空時不比對）；server 路徑不一致修正；CORS + OPTIONS preflight 處理；manifest host_permissions 改為 `http://localhost/*`（配合 options page 可修改 port）；類別查無對照時留空 + 印警告；JSON 寫入指定 `ensure_ascii=False`；轉換腳本加入重複執行保護；寫入原子性（暫存檔 + rename）；reason 回應動態產生
+
 ## 2026-07-20
 
 ### 修正

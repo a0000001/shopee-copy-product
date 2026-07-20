@@ -8,14 +8,17 @@
     "clipboardWrite",
     "clipboardRead",
     "contextMenus",
-    "downloads"
+    "downloads",
+    "storage"
   ],
   "host_permissions": [
     "https://shopee.tw/*",
     "https://www.shopee.tw/*",
     "https://seller.shopee.tw/*",
-    "https://*.img.susercontent.com/*"
+    "https://*.img.susercontent.com/*",
+    "http://localhost/*"
   ],
+  "options_page": "options.html",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Shopee Get Content"
