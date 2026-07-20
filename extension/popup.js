@@ -105,7 +105,9 @@ function toJsonClipboard(data) {
     description: data.description || '',
     url: data.url || '',
     images: data.images || [],
-    videos: data.videos || []
+    videos: data.videos || [],
+    dimension: '10x10x4',
+    installment: 24
   }, null, 2)
 }
 

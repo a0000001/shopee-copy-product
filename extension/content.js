@@ -1122,6 +1122,107 @@
       results.push({ field: '品牌', ok: false, error: e.message })
     }
 
+    // ── 填入屬性：尺寸（長 x 寬 x 高） ──
+    const dimension = data.dimension || ''
+    if (dimension) {
+      results.push({ field: '尺寸（長 x 寬 x 高）', ...(await fillFieldAsync(dimension,
+        () => findFieldByLabel('尺寸（長 x 寬 x 高）'),
+        async () => {
+          const attrSection = document.querySelector('[data-product-edit-field-unique-id="brandAndAttributes"]')
+          if (!attrSection) return null
+          const rows = attrSection.querySelectorAll('.edit-row')
+          for (const row of rows) {
+            const label = (row.querySelector('.edit-label')?.textContent || '').replace(/[\s*]+/g, '')
+            if (label.includes('尺寸')) {
+              return row.querySelector('input.eds-input__input')
+            }
+          }
+          return null
+        }
+      ))})
+    }
+
+    // ── 信用卡分期付款 ──
+    const installment = data.installment
+    if (installment) {
+      try {
+        // 1. 開啟分期付款（選「是」）
+        const enableRadio = document.querySelector('[data-product-edit-field-unique-id*="installment"] input[value="true"], [data-product-edit-field-unique-id*="installment"] input.eds-radio__input[value="true"]')
+          || document.querySelector('[data-product-edit-field-unique-id*="installment"] .eds-switch')
+          || (() => {
+            const rows = document.querySelectorAll('.edit-row')
+            for (const row of rows) {
+              const label = (row.querySelector('.edit-label')?.textContent || '').replace(/[\s*]+/g, '')
+              if (label.includes('分期')) {
+                return row.querySelector('input[type="radio"][value="true"], input[type="radio"][value="1"], .eds-switch')
+              }
+            }
+            return null
+          })()
+        if (enableRadio) {
+          if (enableRadio.tagName === 'INPUT' && enableRadio.type === 'radio') {
+            enableRadio.checked = true
+            enableRadio.dispatchEvent(new Event('change', { bubbles: true }))
+          } else {
+            enableRadio.click()
+          }
+          results.push({ field: '信用卡分期付款', ok: true })
+        } else {
+          results.push({ field: '信用卡分期付款', ok: false, error: '找不到分期付款開關' })
+        }
+
+        // 2. 設定期數為 24（等 Vue re-render → 按鈕 → Modal → bubble → 確認）
+        try {
+          // 等 Vue 把「設定期數」按鈕渲染出來（radio 剛切「是」要等 re-render）
+          let termBtn = null
+          for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 200))
+            termBtn = Array.from(document.querySelectorAll('button'))
+              .find(b => b.textContent.trim() === '設定期數')
+            if (termBtn) break
+          }
+          if (!termBtn) {
+            results.push({ field: '設定期數', ok: false, error: '找不到設定期數按鈕' })
+          } else {
+            termBtn.click()
+            // 等 Vue 把 slider bubble 渲染好
+            await waitForElement('.tenure-slider-bubble', 4000)
+            await new Promise(r => setTimeout(r, 600))
+
+            // 點「24期」bubble
+            const b24 = Array.from(document.querySelectorAll('.tenure-slider-bubble'))
+              .find(b => b.textContent.trim() === '24期')
+            if (b24) b24.click()
+            await new Promise(r => setTimeout(r, 600))
+
+            // 等按鈕啟用（Vue 需要時間從「儲存」disabled→「確認」enabled）
+            let saveBtn = null
+            for (let i = 0; i < 15; i++) {
+              await new Promise(r => setTimeout(r, 200))
+              saveBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                const txt = b.textContent.trim()
+                return (txt === '確認' || txt === '儲存' || txt === '保存') && !b.disabled
+              })
+              if (saveBtn) break
+            }
+            if (saveBtn) {
+              saveBtn.click()
+              results.push({ field: '設定期數', ok: true })
+            } else {
+              const allBtns = Array.from(document.querySelectorAll('button'))
+                .map(b => `"${b.textContent.trim()}" disabled=${b.disabled}`)
+              results.push({ field: '設定期數', ok: false,
+                error: `找不到啟用按鈕，所有按鈕: ${allBtns.join(' | ')}` })
+            }
+          }
+        } catch (e) {
+          results.push({ field: '設定期數', ok: false, error: e.message })
+        }
+      } catch (e) {
+        console.error('[SGC] Installment setting error:', e)
+      }
+    }
+
     // 處理媒體自動下載與上傳
     try {
       const mediaResults = await uploadMediaAsync(data)

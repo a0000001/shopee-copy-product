@@ -2,6 +2,20 @@
 
 > 本文件記錄 Shopee Copy Product 所有歷史變更。2026-07-19 前之紀錄由原 repo (`S:\projects\shopee`) git history 遷移整理，commit hash 保留供交叉參考。
 
+## 2026-07-20
+
+### 修正
+
+- `信用卡分期設定填入` — 新增 `fillAll` 中填入「尺寸（長x寬x高）」屬性與「信用卡分期付款」（啟用 + 設為 24 期）
+- `設定期數 Modal 互動修復` — 切換分期 radio 為「是」後，補上最多 3 秒 retry 等待 Vue re-render 「設定期數」按鈕；`waitForElement` 改為等待 `.tenure-slider-bubble`（目標節點）而非 modal 容器
+- `017-fix` 規格文件完成，記錄根因分析（radio toggle → Vue re-render 時序）、隔離變因測試（排除 `isTrusted` 假說）、DOM 結構（installment modal）
+- `14-seller-new-product-dom-analysis.md` 新增信用卡分期 DOM 結構與實戰教訓
+
+### 新增檔案
+
+- `extension/diagnose-installment.js` — 設定期數流程驗證診斷腳本
+- `docs/spec/017-fix-新增賣家屬性填入與信用卡分期（seller_field_installment）.md`
+
 ## 2026-07-19 (Day 1 開發尾聲)
 
 ### 專案獨立

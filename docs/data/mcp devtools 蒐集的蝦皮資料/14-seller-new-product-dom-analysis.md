@@ -340,3 +340,102 @@ editor.dispatchEvent(new Event('input', { bubbles: true }))
 | 商品保存狀況 | condition | EDS Select（全新/二手） |
 | 預約上架時間 | scheduledPublishTime | EDS DatePicker |
 | 主商品貨號 | parentSku | text input |
+| 信用卡分期付款 | installment | radio（否/是）+ 自訂按鈕「設定期數」+ Modal |
+
+---
+
+## 十一、信用卡分期付款（installment）DOM 結構
+
+**位置**：運費與物流頁籤底部（或付款設定區塊）
+
+**流程**：radio 切「是」→ Vue re-render 出現「設定期數」按鈕 → 點擊開 Modal → slider 選期數 → 確認
+
+### 11.1 啟用分期（radio）
+
+```html
+<div class="edit-row">
+  <div class="edit-label edit-title"><span>信用卡分期付款</span></div>
+  <div class="edit-main">
+    <div data-product-edit-field-unique-id="installment">
+      <div class="eds-radio-group">
+        <label class="eds-radio"><input type="radio" value="false" /> 否</label>
+        <label class="eds-radio"><input type="radio" value="true" /> 是</label>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**啟用 radio 後**，Vue 非同步 re-render 下方出現狀態列 + 按鈕：
+
+```html
+<div class="status">
+  <p>目前允許的分期期數：<span></span><a>審核通過</a></p>
+  <button class="eds-button eds-button--normal btn">設定期數</button>
+</div>
+```
+
+### 11.2 設定期數 Modal
+
+```html
+<div class="eds-modal__content">
+  <div class="eds-modal__header">設定信用卡分期</div>
+  <div class="eds-modal__body">
+    <div class="installment-setting-modal">
+      <div class="tenure-slider">
+        <div class="tenure-slider-bubble" style="left: 0%;">3期</div>
+        <div class="tenure-slider-bubble" style="left: 33.3333%;">6期</div>
+        <div class="tenure-slider-bubble" style="left: 66.6667%;">12期</div>
+        <div class="tenure-slider-bubble" style="left: 100%;">24期</div>
+      </div>
+      <div class="installment-setting-modal__footer">
+        <button>取消</button>
+        <button class="eds-button--primary">確認</button>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**關鍵細節**：
+- 按鈕文字隨狀態變化：無選取時「儲存」(disabled)，選取後「確認」(enabled)
+- `document.querySelector('.eds-modal')` 會誤命中圖片裁切 Modal（`image-cropper-modal`），不可用
+- `.tenure-slider-bubble` 初始 `active=false`，需點擊啟用
+
+---
+
+## 十二、實戰教訓（2026-07-20 診斷經驗）
+
+### 教訓 1：Vue radio toggle 後「等 re-render」再找依賴 UI
+
+**錯誤寫法**（搜 button 前無 await）：
+```javascript
+radio.checked = true
+radio.dispatchEvent(new Event('change', { bubbles: true }))
+// ❌ Vue 還沒 re-render，底下的 button 還不存在
+const btn = document.querySelector('button') // → null
+```
+
+**正確寫法**（retry 等 Vue re-render）：
+```javascript
+radio.checked = true
+radio.dispatchEvent(new Event('change', { bubbles: true }))
+let btn = null
+for (let i = 0; i < 15; i++) { // 最多 3 秒
+  await new Promise(r => setTimeout(r, 200))
+  btn = document.querySelector('button')
+  if (btn) break
+}
+```
+
+這是本次修復的**唯一必要修正**。診斷腳本之所以成功，是因為測試時分期已是「是」狀態、按鈕早已存在；但 extension 剛從「否」切到「是」，button 還不存在。
+
+### 教訓 2：`waitForElement` 要等目標節點而非容器
+
+錯誤：`waitForElement('[class*="installment-setting-modal"]')` — modal 容器 DOM 插入時 Vue 子元件還沒渲染。
+
+正確：`waitForElement('.tenure-slider-bubble')` — 等實際要互動的元素出現。
+
+### 教訓 3：`dispatchEvent(isTrusted=false)` 可正常觸發 Vue 3
+
+原先懷疑 Vue 3 的 `@click` 或 `@pointerdown` 會過濾 `isTrusted=false` 的事件。隔離變因測試（2026-07-20）證明 `dispatchEvent(new MouseEvent('pointerdown', ...))` 可以讓 bubble 從 `active=false` 變 `active=true`。**事件信任鏈不是問題**。
