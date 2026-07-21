@@ -4,6 +4,18 @@
 
 ## 2026-07-21
 
+### 新增功能：022 批量自動上傳、多帳號機制、擴充 Extension 功能
+
+- `extension/content.js` — 新增 `extractSellerProductList()` 從我的商品列表頁 DOM 爬取已上架 SKU；新增 `window.postMessage` handler 讓 CDP 可直接觸發 `fillProductData`、`extractSellerProductList`、`getProductData`；`extractProductData()` 成功後自動觸發 `saveRawProductData` 儲存原始資料至本地
+- `extension/background.js` — 新增 `saveRawProductData()` 函數，將商品資料（JSON + 圖片 + 影片）存到 `Downloads/ShopeeRawData/{商品標題}/`；同時嘗試同步至目錄伺服器 `/saveRawProductData` 端點
+- `scripts/local-catalog-server.py` — 新增 `/saveRawProductData` POST 端點，接受完整產品資料，建立 `{title}/images/` 和 `{title}/videos/` 子資料夾，從 URL 下載圖片（最多 9 張）與影片（最多 1 部）到 `E:\proj\shopee\mazz68\{title}\`（可透過環境變數 `SGC_RAW_DATA_PATH` 覆蓋）
+- `scripts/test-catalog-server.py` — 新增 Step 4 共 9 項測試，驗證 `extractSellerProductList`、`postMessage` handler、`saveRawProductData`、伺服器端點、022 spec 文件
+- `docs/spec/022-plan-批量自動上傳與多帳號機制（batch_upload_multi_account）.md` — 完整實作計畫，含批量上傳流程圖、多帳號切換方案、優先順序
+
+### 修正
+
+- `local-catalog-server.py` — `do_POST` 重構為 `_handle_append` 與 `_handle_save_raw` 兩個方法，路由從 if-else 改為 elif 分支
+
 ### 新增功能：019 本地目錄伺服器 — Extension 一鍵寫入商品目錄
 
 - `scripts/convert-old-catalog.py` — 一次性轉換腳本：181 筆舊格式（`product_name`、`price_twd`）轉為新格式（`ps_product_name`、`ps_price`），自動備份 `.bak`，支援重複執行保護，查無類別對照時留空並印警告清單

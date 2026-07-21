@@ -528,6 +528,9 @@
     data.url = window.location.href
     if (ids) { data.shopid = ids.shopid; data.itemid = ids.itemid }
 
+    // ── 儲存原始資料到本地（fire-and-forget，不影響回傳） ──
+    chrome.runtime.sendMessage({ action: 'saveRawProductData', data: data }).catch(() => {})
+
     return data
   }
 
@@ -1326,7 +1329,51 @@
       fillAll(msg.data || {}).then(sendResponse)
       return true
     }
+    if (msg.action === 'extractSellerProductList') {
+      sendResponse(extractSellerProductList())
+      return true
+    }
   })
+
+  // ── postMessage handler for CDP-triggered operations ──
+  window.addEventListener('message', async (event) => {
+    if (event.source !== window) return
+    const msg = event.data
+    if (msg.action === 'fillProductData') {
+      const result = await fillAll(msg.data || {})
+      window.postMessage({ action: 'fillProductDataResult', result }, '*')
+    }
+    if (msg.action === 'extractSellerProductList') {
+      const items = extractSellerProductList()
+      window.postMessage({ action: 'extractSellerProductListResult', items }, '*')
+    }
+    if (msg.action === 'getProductData') {
+      const data = await extractProductData()
+      window.postMessage({ action: 'getProductDataResult', data }, '*')
+    }
+  })
+
+  // ── 從我的商品列表頁 DOM 爬取已上架 SKU ──
+  function extractSellerProductList() {
+    const items = []
+    const rows = document.querySelectorAll('.eds-table__row.valign-top')
+    for (const row of rows) {
+      const nameLink = row.querySelector('a[href*="/portal/product/"]')
+      if (!nameLink) continue
+      const text = row.textContent
+      const skuMatch = text.match(/主商品貨號:\s*(\S+)/)
+      const idMatch = text.match(/商品 ID:\s*(\d+)/)
+      const priceMatch = text.match(/NT\$(\d+)/)
+      items.push({
+        name: nameLink.textContent.trim(),
+        productId: idMatch ? idMatch[1] : '',
+        sku: skuMatch && skuMatch[1] !== '-' ? skuMatch[1] : '',
+        url: nameLink.href,
+        price: priceMatch ? priceMatch[1] : '',
+      })
+    }
+    return items
+  }
 
   // ── Auto-trigger carousel full render on product page（讓第一次點 icon 就有完整圖片） ──
   if (isProductPage() && !isSellerEditPage()) {

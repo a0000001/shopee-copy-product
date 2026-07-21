@@ -190,6 +190,26 @@ install_script = BASE / "scripts" / "install-native-host.ps1"
 check("install-native-host.ps1 存在", install_script.exists())
 check("install 腳本含 ExtensionId 參數", "ExtensionId" in install_script.read_text(encoding="utf-8"))
 
+# ── Step 4: 驗證新增功能（022 spec） ──
+print("\n=== 4. 驗證新增功能（批量上傳與多帳號） ===\n")
+
+content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
+check("content.js 含 extractSellerProductList", "function extractSellerProductList" in content_js)
+check("content.js 含 postMessage handler", "addEventListener('message'" in content_js or "addEventListener(\"message\"" in content_js)
+check("content.js 含 saveRawProductData 發送", "saveRawProductData" in content_js)
+
+bg_js = (BASE / "extension" / "background.js").read_text(encoding="utf-8")
+check("background.js 含 saveRawProductData 處理", "action === 'saveRawProductData'" in bg_js or "action === \"saveRawProductData\"" in bg_js)
+check("background.js 含 saveRawProductData 函數", "async function saveRawProductData" in bg_js)
+
+server_py = (BASE / "scripts" / "local-catalog-server.py").read_text(encoding="utf-8")
+check("伺服器含 saveRawProductData 端點", "saveRawProductData" in server_py)
+check("伺服器含 RAW_DATA_PATH", "RAW_DATA_PATH" in server_py)
+check("伺服器含 urllib.request", "urllib.request" in server_py)
+
+spec_022 = BASE / "docs" / "spec" / "022-plan-批量自動上傳與多帳號機制（batch_upload_multi_account）.md"
+check("022 spec 文件存在", spec_022.exists())
+
 # ── Results ──
 print(f"\n{'='*40}")
 print(f"通過：{passed}  失敗：{failed}")

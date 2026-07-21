@@ -93,6 +93,87 @@ async function appendToCatalog(serverUrl, product) {
   }
 }
 
+async function saveRawProductData(data) {
+  const title = data.title || 'shopee_product'
+  const safeName = safeFolderName(title)
+  const productPath = `ShopeeRawData/${safeName}`
+
+  const results = { saved: [], errors: [] }
+
+  // 1. 儲存 JSON 資料（到 Downloads/ShopeeRawData/{title}/）
+  const jsonStr = JSON.stringify(data, null, 2)
+  const jsonBlob = new Blob([jsonStr], { type: 'application/json' })
+  const jsonUrl = URL.createObjectURL(jsonBlob)
+  try {
+    const id = await chrome.downloads.download({
+      url: jsonUrl,
+      filename: `${productPath}/${safeName}.json`,
+      conflictAction: 'uniquify'
+    })
+    results.saved.push({ type: 'json', id })
+  } catch (e) {
+    results.errors.push({ type: 'json', error: e.message })
+  }
+  setTimeout(() => URL.revokeObjectURL(jsonUrl), 60000)
+
+  // 2. 下載圖片
+  const images = Array.isArray(data.images) ? data.images : []
+  for (let i = 0; i < images.length; i++) {
+    try {
+      const converted = await toJpgDataUrl(images[i], true).catch(e => {
+        if (e.message === 'SKIP_PNG') throw e
+        return null
+      })
+      const downloadUrl = converted || images[i]
+      const id = await chrome.downloads.download({
+        url: downloadUrl,
+        filename: `${productPath}/images/${safeName}_${i + 1}.jpg`,
+        conflictAction: 'uniquify'
+      })
+      results.saved.push({ type: 'image', index: i, id })
+    } catch (e) {
+      if (e.message === 'SKIP_PNG') {
+        results.saved.push({ type: 'image', index: i, skipped: true, reason: 'PNG' })
+      } else {
+        results.errors.push({ type: 'image', index: i, error: e.message })
+      }
+    }
+  }
+
+  // 3. 下載影片
+  const videos = Array.isArray(data.videos) ? data.videos : []
+  for (let i = 0; i < videos.length; i++) {
+    try {
+      const id = await chrome.downloads.download({
+        url: videos[i],
+        filename: `${productPath}/videos/${safeName}_video_${i + 1}.mp4`,
+        conflictAction: 'uniquify'
+      })
+      results.saved.push({ type: 'video', index: i, id })
+    } catch (e) {
+      results.errors.push({ type: 'video', index: i, error: e.message })
+    }
+  }
+
+  // 4. 嘗試同步到目錄伺服器（若正在運行，存到 E:\proj\shopee\mazz68\）
+  try {
+    const resp = await fetch('http://localhost:9801/saveRawProductData', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product: data }),
+      signal: AbortSignal.timeout(5000)
+    })
+    if (resp.ok) {
+      const serverResult = await resp.json()
+      results.serverSync = serverResult
+    }
+  } catch {
+    // 伺服器不在運行中，忽略
+  }
+
+  return { ok: true, results }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'download') {
     handleDownloads(msg).then(sendResponse)
@@ -112,6 +193,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.action === 'appendToCatalog') {
     appendToCatalog(msg.serverUrl || 'http://localhost:9801', msg.product || {})
+      .then(sendResponse)
+      .catch(err => sendResponse({ ok: false, error: err.message }))
+    return true
+  }
+  if (msg.action === 'saveRawProductData') {
+    saveRawProductData(msg.data || {})
       .then(sendResponse)
       .catch(err => sendResponse({ ok: false, error: err.message }))
     return true

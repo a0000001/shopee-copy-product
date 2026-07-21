@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+import urllib.request
 from datetime import datetime
 from difflib import SequenceMatcher
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -14,6 +15,7 @@ DEFAULT_CATALOG = PROJECT_DIR / "docs" / "data" / "product-catalog-tw.json"
 SIMILARITY_THRESHOLD = 0.85
 
 catalog_path: Path = DEFAULT_CATALOG
+RAW_DATA_PATH = Path(os.environ.get("SGC_RAW_DATA_PATH", "E:/proj/shopee/mazz68"))
 LOG_FILE = Path(os.environ.get("TEMP", ".")) / "sgc-server-log.txt"
 
 
@@ -141,51 +143,13 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         log_request("POST", parsed.path, "start", f"CL={self.headers.get('Content-Length', '?')} Origin={self.headers.get('Origin', '?')}")
         try:
-            if parsed.path != "/append":
+            if parsed.path == "/append":
+                self._handle_append()
+            elif parsed.path == "/saveRawProductData":
+                self._handle_save_raw()
+            else:
                 self._send_json(404, {"ok": False, "error": "not found"})
-                return
-
-            length = int(self.headers.get("Content-Length", 0))
-            if length == 0:
-                self._send_json(400, {"ok": False, "error": "empty body"})
-                return
-
-            try:
-                body = json.loads(self.rfile.read(length))
-            except json.JSONDecodeError:
-                self._send_json(400, {"ok": False, "error": "invalid JSON"})
-                return
-
-            product = body.get("product", {})
-            if not product.get("ps_product_name"):
-                self._send_json(400, {"ok": False, "error": "缺少 ps_product_name"})
-                return
-
-            catalog = load_catalog()
-            action, reason, index = check_duplicate(product, catalog)
-
-            if action == "skipped":
-                log_request("POST", "/append", "200-skipped")
-                self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
-                return
-
-            if action == "merged":
-                merge_product(catalog[index], product)
-                save_catalog(catalog)
-                log_request("POST", "/append", "200-merged")
-                self._send_json(200, {"ok": True, "action": "merged", "reason": reason, "catalog_size": len(catalog)})
-                return
-
-            catalog.append(product)
-            save_catalog(catalog)
-
-            resp = {"ok": True, "action": "appended", "catalog_size": len(catalog)}
-            if action == "appended_with_warning":
-                resp["action"] = "appended_with_warning"
-                resp["reason"] = reason
-
-            log_request("POST", "/append", "200-appended")
-            self._send_json(200, resp)
+            return
         except Exception as e:
             import traceback
             err = f"{type(e).__name__}: {e}"
@@ -195,6 +159,132 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(500, {"ok": False, "error": err})
             except:
                 pass
+
+    def _read_body(self):
+        length = int(self.headers.get("Content-Length", 0))
+        if length == 0:
+            return None
+        try:
+            return json.loads(self.rfile.read(length))
+        except json.JSONDecodeError:
+            return None
+
+    def _handle_append(self):
+        body = self._read_body()
+        if body is None:
+            self._send_json(400, {"ok": False, "error": "empty body or invalid JSON"})
+            return
+
+        product = body.get("product", {})
+        if not product.get("ps_product_name"):
+            self._send_json(400, {"ok": False, "error": "缺少 ps_product_name"})
+            return
+
+        catalog = load_catalog()
+        action, reason, index = check_duplicate(product, catalog)
+
+        if action == "skipped":
+            log_request("POST", "/append", "200-skipped")
+            self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
+            return
+
+        if action == "merged":
+            merge_product(catalog[index], product)
+            save_catalog(catalog)
+            log_request("POST", "/append", "200-merged")
+            self._send_json(200, {"ok": True, "action": "merged", "reason": reason, "catalog_size": len(catalog)})
+            return
+
+        catalog.append(product)
+        save_catalog(catalog)
+
+        resp = {"ok": True, "action": "appended", "catalog_size": len(catalog)}
+        if action == "appended_with_warning":
+            resp["action"] = "appended_with_warning"
+            resp["reason"] = reason
+
+        log_request("POST", "/append", "200-appended")
+        self._send_json(200, resp)
+
+    def _handle_save_raw(self):
+        body = self._read_body()
+        if body is None:
+            self._send_json(400, {"ok": False, "error": "empty body or invalid JSON"})
+            return
+
+        product = body.get("product", {})
+        title = product.get("title", product.get("ps_product_name", "shopee_product"))
+        safe_name = re.sub(r'[<>:"/\\|?*]', '_', title)[:100]
+
+        product_dir = RAW_DATA_PATH / safe_name
+        product_dir.mkdir(parents=True, exist_ok=True)
+
+        # 儲存 JSON
+        json_path = product_dir / f"{safe_name}.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(product, f, ensure_ascii=False, indent=2)
+        log_request("POST", "/saveRawProductData", "200", f"json={json_path}")
+
+        # 儲存圖片（從 URL 下載）
+        raw_data_dir = product_dir / "images"
+        raw_data_dir.mkdir(exist_ok=True)
+        images = product.get("images", [])
+        if not images:
+            for i in range(1, 9):
+                key = f"ps_item_image_{i}"
+                val = product.get(key, "")
+                if val:
+                    images.append(val)
+            cover = product.get("ps_item_cover_image", "")
+            if cover:
+                images.insert(0, cover)
+
+        img_count = 0
+        for i, url in enumerate(images):
+            if not url:
+                continue
+            if img_count >= 9:
+                break
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = resp.read()
+                ext = "jpg"
+                if resp.headers.get("Content-Type", "").startswith("image/png"):
+                    ext = "png"
+                img_path = raw_data_dir / f"{safe_name}_{i + 1}.{ext}"
+                with open(img_path, "wb") as f:
+                    f.write(data)
+                img_count += 1
+            except Exception as e:
+                log_request("POST", "/saveRawProductData", "WARN", f"image {i} download failed: {e}")
+
+        # 儲存影片
+        videos = product.get("videos", [])
+        vid_dir = product_dir / "videos"
+        vid_dir.mkdir(exist_ok=True)
+        vid_count = 0
+        for url in videos:
+            if not url or vid_count >= 1:
+                break
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = resp.read()
+                vid_path = vid_dir / f"{safe_name}_video.mp4"
+                with open(vid_path, "wb") as f:
+                    f.write(data)
+                vid_count += 1
+            except Exception as e:
+                log_request("POST", "/saveRawProductData", "WARN", f"video download failed: {e}")
+
+        self._send_json(200, {
+            "ok": True,
+            "path": str(product_dir),
+            "json": str(json_path),
+            "images": img_count,
+            "videos": vid_count,
+        })
 
     def log_message(self, format, *args):
         print(f"[{self.client_address[0]}] {args[0]} {args[1]} {args[2]}")
