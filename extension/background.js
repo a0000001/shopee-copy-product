@@ -74,17 +74,21 @@ async function checkServerHealth(serverUrl) {
 
 async function appendToCatalog(serverUrl, product) {
   try {
+    console.log('[SGC] appendToCatalog fetch:', serverUrl + '/append')
     const resp = await fetch(serverUrl + '/append', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product }),
     })
+    console.log('[SGC] appendToCatalog status:', resp.status, resp.statusText)
     const result = await resp.json()
+    console.log('[SGC] appendToCatalog result:', result)
     if (!resp.ok) {
       return { ok: false, error: result.error || `HTTP ${resp.status}` }
     }
     return result
   } catch (e) {
+    console.error('[SGC] appendToCatalog error:', e)
     return { ok: false, error: e.message }
   }
 }

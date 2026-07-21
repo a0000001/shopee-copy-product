@@ -19,11 +19,13 @@ async function submitToCatalog(data) {
   try {
     const json = toJsonClipboard(data)
     const product = JSON.parse(json)[0]
+    console.log('[SGC] submitToCatalog sending appendToCatalog msg')
     const result = await chrome.runtime.sendMessage({
       action: 'appendToCatalog',
       serverUrl: _serverUrl,
       product,
     })
+    console.log('[SGC] submitToCatalog result:', result)
     if (result?.ok && result.action === 'appended') {
       showToast('✅ 已寫入目錄')
     } else if (result?.ok && result.action === 'appended_with_warning') {
