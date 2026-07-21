@@ -79,13 +79,31 @@ try:
     check("成功寫入", r.get("action") == "appended", str(r))
     check("目錄大小 +1", r.get("catalog_size") == base_count + 1, str(r))
 
-    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 500, "url": "http://test/append-test", "ps_category": "100644", "ps_stock": 999}})
-    check("重複 url 跳過", r.get("action") == "skipped", str(r))
+    # ── 先建立一筆完整資料（含 price/stock/category），再送相同 url → 應 skipped ──
+    r = api("/append", "POST", {"product": {"ps_product_name": "完整商品", "ps_price": 500, "url": "http://test/complete-skip", "ps_category": "100644", "ps_stock": 999, "ps_product_description": "desc"}})
+    check("完整商品寫入", r.get("action") == "appended", str(r))
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "完整商品", "ps_price": 500, "url": "http://test/complete-skip", "ps_category": "100644", "ps_stock": 999, "ps_product_description": "desc"}})
+    check("完整商品重複 url 跳過", r.get("action") == "skipped", str(r))
     check("reason 含 url", "url" in r.get("reason", ""), str(r))
 
-    r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 999, "url": "http://test/other-url", "ps_category": "100644", "ps_stock": 999}})
-    check("重複名稱跳過", r.get("action") == "skipped", str(r))
+    r = api("/append", "POST", {"product": {"ps_product_name": "完整商品", "ps_price": 999, "url": "http://test/other-url", "ps_category": "100644", "ps_stock": 999, "ps_product_description": "desc"}})
+    check("完整商品重複名稱跳過", r.get("action") == "skipped", str(r))
     check("reason 含名稱", "名稱" in r.get("reason", ""), str(r))
+
+    # ── 先存一筆不完整的商品（缺 category），再送完整資料 → 應 merged ──
+    r = api("/append", "POST", {"product": {"ps_product_name": "待補資料商品", "ps_price": 300, "url": "http://test/merge-me", "ps_stock": 50}})
+    check("不完整商品寫入", r.get("action") == "appended", str(r))
+
+    r = api("/append", "POST", {"product": {"ps_product_name": "待補資料商品", "ps_price": 300, "url": "http://test/merge-me", "ps_category": "100644", "ps_stock": 50, "ps_product_description": "補上描述"}})
+    check("不完整商品 url 吻合 → merged", r.get("action") == "merged", str(r))
+    check("reason 含 url", "url" in r.get("reason", ""), str(r))
+
+    # 驗證 merge 後資料確實補齊
+    merged = json.loads(CATALOG_TEST.read_text(encoding="utf-8"))
+    merge_target = [e for e in merged if e.get("ps_product_name") == "待補資料商品"][0]
+    check("merged 後 ps_category 已補齊", merge_target.get("ps_category") == "100644", str(merge_target))
+    check("merged 後 ps_product_description 已補齊", merge_target.get("ps_product_description") == "補上描述", str(merge_target))
 
     # ── Canonical URL: same shop/item id, different query params ──
     r = api("/append", "POST", {"product": {"ps_product_name": "第二件商品", "ps_price": 300, "url": "https://shopee.tw/product/12345/67890?sp=abc", "ps_category": "100644", "ps_stock": 50}})
@@ -105,7 +123,7 @@ try:
     check("錯誤訊息正確", "ps_product_name" in r.get("error", ""), str(r))
 
     final = json.loads(CATALOG_TEST.read_text(encoding="utf-8"))
-    check(f"測試檔 = {base_count + 3} 筆", len(final) == base_count + 3, f"實際 {len(final)}")
+    check(f"測試檔 = {base_count + 5} 筆", len(final) == base_count + 5, f"實際 {len(final)}")
     check("JSON 無毀損", all("ps_product_name" in item for item in final))
 
 finally:

@@ -56,26 +56,55 @@ def check_duplicate(product, catalog):
 
     url_id = canonical_product_id(url) if url else ""
 
-    for existing in catalog:
+    for i, existing in enumerate(catalog):
         existing_sku = existing.get("ps_sku_short", "").strip()
         existing_url = existing.get("url", "").strip()
         existing_name = existing.get("ps_product_name", "").strip()
 
         if sku and existing_sku and sku == existing_sku:
-            return "skipped", "ps_sku_short 已存在目錄中", None
+            if _is_complete(existing):
+                return "skipped", "ps_sku_short 已存在目錄中", None
+            else:
+                return "merged", "已更新既有資料（ps_sku_short 吻合）", i
 
         if url_id and existing_url:
             existing_url_id = canonical_product_id(existing_url)
             if url_id == existing_url_id:
-                return "skipped", "url 已存在目錄中", None
+                if _is_complete(existing):
+                    return "skipped", "url 已存在目錄中", None
+                else:
+                    return "merged", "已更新既有資料（url 吻合）", i
 
         if name and existing_name:
             if name == existing_name:
-                return "skipped", "商品名稱已存在目錄中", None
+                if _is_complete(existing):
+                    return "skipped", "商品名稱已存在目錄中", None
+                else:
+                    return "merged", "已更新既有資料（名稱吻合）", i
             if is_similar(name, existing_name):
                 return "appended_with_warning", f"與現有商品「{existing_name}」名稱相似，請確認", None
 
     return None, None, None
+
+
+def _is_complete(item):
+    required = ["ps_price", "ps_stock", "ps_category"]
+    for key in required:
+        val = item.get(key)
+        if val is None or (isinstance(val, str) and val.strip() == ""):
+            return False
+    return True
+
+
+def merge_product(existing, product):
+    for key, val in product.items():
+        if key in ("computer_specs", "videos", "tag") and isinstance(val, (list, dict)):
+            if not val and not existing.get(key):
+                existing[key] = val
+            continue
+        existing_val = existing.get(key)
+        if existing_val is None or (isinstance(existing_val, str) and existing_val.strip() == ""):
+            existing[key] = val
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -133,11 +162,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             catalog = load_catalog()
-            action, reason, _ = check_duplicate(product, catalog)
+            action, reason, index = check_duplicate(product, catalog)
 
             if action == "skipped":
                 log_request("POST", "/append", "200-skipped")
                 self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
+                return
+
+            if action == "merged":
+                merge_product(catalog[index], product)
+                save_catalog(catalog)
+                log_request("POST", "/append", "200-merged")
+                self._send_json(200, {"ok": True, "action": "merged", "reason": reason, "catalog_size": len(catalog)})
                 return
 
             catalog.append(product)
