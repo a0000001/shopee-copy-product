@@ -4,14 +4,15 @@
 
 ## 2026-07-21
 
-### 批次上傳 Extension 分頁：實作完成
+### 批次上傳 Extension 分頁：實作與問題診斷
 
-- `extension/content.js` — 新增 `checkSaveButton` 與 `clickSaveButton` 兩個 message handler，支援批次上傳流程中檢查與點擊儲存按鈕；使用 `Array.from(btns).find(b => /儲存|保存|確認/.test(...))` 取代非法 CSS `:contains()`
+- `extension/content.js` — 新增 `checkSaveButton` 與 `clickSaveButton` 兩個 message handler；`fillAll` 加入 `skipMedia` 參數；新增 `uploadMedia` message handler；`fillProductData` 與 `uploadMedia` handler 加入 `.catch()` 避免未捕捉 reject
 - `extension/popup.html` — 賣家模式新增「批次上傳」按鈕
 - `extension/popup.js` — 批次上傳按鈕點擊後開啟 `batch-upload.html` 分頁
-- `extension/batch-upload.html` — 批次上傳獨立分頁 UI，四步驟流程（選檔→掃描→上傳→完成），含進度條、即時日誌、暫停/重試
-- `extension/batch-upload.js` — 批次上傳核心邏輯：`waitForTabReady()` 用 `chrome.tabs.onUpdated` 監聽分頁載入；`fillAndSave()` 檢查 `fillAll` 回傳的個別欄位失敗；`extractSellerProductList()` 去重；逐筆間隔 3 秒避免 WAF
+- `extension/batch-upload.html` — 批次上傳獨立分頁 UI，四步驟流程（選檔→掃描→上傳→完成），含進度條、即時日誌、暫停/重試、錯誤複製按鈕
+- `extension/batch-upload.js` — `waitForTabReady()` 用 `chrome.tabs.onUpdated` 監聽分頁載入；`fillAndSave` 完全複製 popup.js 流程（單行 `chrome.tabs.sendMessage`），移除自訂轉換/retry/兩段式；新增連續 2 筆錯誤自動暫停；暫停後保留錯誤日誌
 - `scripts/test-catalog-server.py` — 新增 Step 6 共 12 項測試，驗證批次上傳相關 handler、按鈕、新檔案
+- `docs/spec/023-02-plan-批次上傳Extension分頁實作（batch_upload_impl）.md` — 更新為 popup.js 複製流程，記錄 Illegal invocation 錯誤現狀
 
 ### 清理目錄：移除無封面商品、從原始資料救回 89 筆
 
