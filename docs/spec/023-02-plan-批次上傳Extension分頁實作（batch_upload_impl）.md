@@ -452,12 +452,12 @@ if (msg.action === 'clickSaveButton') {
 
 2. **WAF 頻率限制** — 蝦皮可能對短時間大量新增商品有頻率限制。3 秒間隔是否足夠？需實際測試後才能確定。
 
-3. **新開分頁的 `fillProductData` 失敗** — 批次上傳流程中，新開分頁後 `chrome.tabs.sendMessage` 會失敗，已出現兩種錯誤：
-   - `A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received`（約 11~14 秒）
-   - `Illegal invocation`（約 6~10 秒）
-   
-   懷疑是 seller 新商品頁在載入過程中有 SPA 重新導向，導致 content script 被重注入、message channel 中斷。但 popup.js 的「從剪貼簿填入」在已開啟的分頁上完全正常。  
-   **目前未解決，需進一步診斷。**
+3. **新開分頁的 `fillProductData` 失敗（Illegal invocation）** — `fillAndSave` 已完全複製 popup.js 的單行流程 `chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: item })`，但仍拋出「Illegal invocation」。  
+   popup 對已開啟的分頁發送正常，但 batch-upload 對 `chrome.tabs.create` 新開的分頁發送失敗。  
+   **需用 DevTools 實際連線 seller 新商品頁面，檢查：**
+   - 頁面是否在載入過程中有 SPA 重新導向
+   - `document_idle` 時 content script 是否已注入
+   - 直接對該分頁執行 `chrome.runtime.sendMessage` 是否正常
 
 ## Tasks
 
