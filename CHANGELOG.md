@@ -69,6 +69,20 @@
 - `local-catalog-server.py` — 新增 `--port` 參數，可指定埠號（預設 9801）
 - `test-catalog-server.py` — 改用 port 9802 執行測試，與 Extension 的 9801 完全隔離；加入啟動前清理殘留伺服器、`finally` 同時清理 `old_server` 與 `server` 雙重保護
 
+### 修正：複製+自動目錄只顯示單一合併提示，不重複彈出 (`8a97544`)
+
+- `popup.js` — `submitToCatalog` 新增 `silent` 參數（靜默模式），自動目錄時不顯示獨立 toast，由 `btnCopy` 統一顯示單一合併提示
+- `content.js` — `uploadMediaAsync` 新增 `images` 陣列重建邏輯，若 `data.images` 為空則從 `ps_item_cover_image` / `ps_item_image_1..8` 補回，相容舊版 JSON 格式
+
+### 修正：伺服器面板改為圖示＋單一按鈕 (`9241a1f`)
+
+- `popup.html` — 伺服器狀態改為純圖示（`⚠` 未啟動／`●` 運行中／`◌` 旋轉檢查中），所有文字移至 `title` 屬性（hover 顯示）；啟動/停止合併為單一按鈕
+- `popup.js` — 新增 `onServerToggle` 取代 `onServerStart`/`onServerStop`；`updateServerStatus` 改為圖示 + CSS class 切換
+
+### 修正：更新JSON核選方塊配色與按鈕區底部間距 (`23050f6`)
+
+- `popup.html` — 核選方塊 `accent-color` 與核選後文字顏色改為 `#ee4d2d`（搭配按鈕主色）；移除按鈕樣式（無邊框、無背景、無 padding）；按鈕區底部 `margin-bottom: 8px`
+
 ## 2026-07-20
 
 ### 修正
