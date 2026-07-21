@@ -173,18 +173,19 @@ Response（錯誤）：
 
 **重複判斷邏輯**（依序比對，回傳第一個符合的結果）：
 
-1. `ps_sku_short` 非空 **且** 目錄中同筆的 `ps_sku_short` 也非空，且兩者相同（兩者皆空時不比對，跳下一條規則） → `skipped`
-2. 將 `url` 正規化為 `shop_id:item_id` 後比對（從 `/product/{shop_id}/{item_id}` 或 `-i.{shop_id}.{item_id}` 抽出），抽不到時退回去掉 query string 比對 path → `skipped`
-3. `ps_product_name` 與目錄中任一筆完全相同 → `skipped`
+1. `ps_sku_short` 非空 **且** 目錄中同筆的 `ps_sku_short` 也非空，且兩者相同（兩者皆空時不比對，跳下一條規則） → 若既有資料完整（有 `ps_price`、`ps_stock`、`ps_category`）則 `skipped`，否則 `merged`
+2. 將 `url` 正規化為 `shop_id:item_id` 後比對（從 `/product/{shop_id}/{item_id}` 或 `-i.{shop_id}.{item_id}` 抽出），抽不到時退回去掉 query string 比對 path → 若既有資料完整則 `skipped`，否則 `merged`
+3. `ps_product_name` 與目錄中任一筆完全相同 → 若既有資料完整則 `skipped`，否則 `merged`
 4. `ps_product_name` 與目錄中任一筆相似度 >= 0.85（`difflib.SequenceMatcher`）但非完全相同 → `appended_with_warning`，資料仍寫入，但 reason 提示「與現有商品「XXX」名稱相似，請確認」
 
-**response 三種 action**：
+**response 四種 action**：
 
 | action | 意義 |
 |--------|------|
 | `appended` | 無重複，已寫入 |
 | `appended_with_warning` | 已寫入，但名稱與目錄中某筆相似，請人工確認 |
-| `skipped` | 偵測到重複，跳過不寫入 |
+| `merged` | 名稱/url/ps_sku_short 吻合，既有資料不完整，已合併補齊 |
+| `skipped` | 偵測到重複且既有資料完整，跳過不寫入 |
 
 **smoke test**：
 ```powershell
@@ -192,7 +193,7 @@ Response（錯誤）：
 python scripts/local-catalog-server.py
 # 另一個視窗測試
 curl -X POST http://localhost:9801/append -H "Content-Type: application/json" -d '{"product":{"ps_product_name":"test","url":"http://test.com"}}'
-# 再次送出相同 url → 應回 skipped
+# 再次送出相同 url（資料不完整，缺 price/stock/category）→ 應回 merged
 curl -X POST http://localhost:9801/append -H "Content-Type: application/json" -d '{"product":{"ps_product_name":"test","url":"http://test.com"}}'
 ```
 

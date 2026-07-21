@@ -30,6 +30,8 @@ async function submitToCatalog(data) {
       showToast('✅ 已寫入目錄')
     } else if (result?.ok && result.action === 'appended_with_warning') {
       showToast('⚠️ ' + (result.reason || '已寫入，但名稱相似'))
+    } else if (result?.ok && result.action === 'merged') {
+      showToast('📝 ' + (result.reason || '已更新既有資料'))
     } else if (result?.ok && result.action === 'skipped') {
       showToast('⏭ ' + result.reason)
     } else {

@@ -37,6 +37,17 @@
 - `catalog-server-host.py` — 加入 `CREATE_NEW_PROCESS_GROUP`（Windows）／`start_new_session`（Unix）讓伺服器獨立於行程樹
 - `docs/spec/020-fix-本地目錄伺服器連線與輪播圖觸發（catalog_connection_carousel）.md` — 建立根因分析與修復文件
 
+### 修正：去重邏輯改為「完整資料才跳過，不完整則合併補齊」
+
+`local-catalog-server.py` 的去重邏輯原先只要名稱/url 相同就跳過，不檢查既有資料是否完整。修正為：
+
+- `check_duplicate()` — 加入 `_is_complete()` 檢查（`ps_price`、`ps_stock`、`ps_category` 三者皆非空才算完整）
+- 完整資料吻合 → `skipped`（跳過不寫入）
+- 不完整資料吻合 → `merged`（合併補齊既有資料中缺少的欄位）
+- 新增 `merge_product()` 函數：逐一欄位檢查，既有資料為空才補入
+- 新增 action `merged`，popup toast 顯示「📝 已更新既有資料」
+- 測試擴大為 50 項（含 merged 驗證：確認 `ps_category` 與 `ps_product_description` 確實補齊）
+
 ## 2026-07-20
 
 ### 修正
