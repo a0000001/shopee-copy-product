@@ -89,58 +89,14 @@ $('btnScan').addEventListener('click', async () => {
 })
 
 // ── 步驟 3：開始上傳 ──
-async function sendMessageWithRetry(tabId, msg, maxRetries = 3, delay = 2000) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await chrome.tabs.sendMessage(tabId, msg)
-    } catch (e) {
-      if (i < maxRetries - 1) {
-        await sleep(delay)
-        continue
-      }
-      throw e
-    }
-  }
-}
-
 async function fillAndSave(item, tabId) {
-  const data = {
-    title: item.ps_product_name,
-    price: item.ps_price,
-    description: item.ps_product_description,
-    images: item.images || [],
-    videos: item.videos || [],
-    ps_category: item.ps_category,
-    ps_stock: item.ps_stock || 999,
-    ps_sku_short: item.ps_sku_short || '',
-    ps_brand: item.ps_brand || 'NoBrand',
-    ps_length: item.ps_length || 10,
-    ps_width: item.ps_width || 10,
-    ps_height: item.ps_height || 4,
-    installment: item.installment || 24,
-    ps_item_cover_image: item.ps_item_cover_image || '',
-    url: item.url || '',
-    skipMedia: true,
-  }
-
-  const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data })
+  // 完全複製 popup.js「從剪貼簿填入」流程：
+  // chrome.tabs.sendMessage({ action: 'fillProductData', data }) → 等待 response
+  // 不轉換欄位、不拆兩段、不加 retry，data 直接傳 item（即 product-catalog 的一筆）
+  const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: item })
 
   if (!result || !result.ok) {
     throw new Error((result && result.error) || 'fillAll 失敗')
-  }
-
-  // 第二段：上傳媒體
-  const mediaData = {
-    images: item.images || [],
-    videos: item.videos || [],
-    title: item.ps_product_name,
-  }
-  if (item.ps_item_cover_image) {
-    mediaData.images.unshift(item.ps_item_cover_image)
-  }
-  const mediaResult = await chrome.tabs.sendMessage(tabId, { action: 'uploadMedia', data: mediaData })
-  if (!mediaResult || !mediaResult.ok) {
-    log('⚠️ ' + item.ps_product_name + ': 媒體上傳失敗 (' + ((mediaResult && mediaResult.error) || '未知') + ')', 'fail')
   }
 
   for (let i = 0; i < 60; i++) {
@@ -215,12 +171,27 @@ $('btnStart').addEventListener('click', async () => {
   const fail = state.results.filter(r => !r.ok).length
   $('successCount').textContent = ok
   $('failCount').textContent = fail
+  if (fail > 0) {
+    const errText = state.results.filter(r => !r.ok).map(r => '❌ ' + r.name + ': ' + (r.error || '')).join('\n')
+    $('errorDetail').textContent = errText
+    $('errorDetail').style.display = 'block'
+  }
 })
 
 $('btnStop').addEventListener('click', () => {
   state.shouldStop = true
   $('btnStop').textContent = '正在停止...'
   $('btnStop').disabled = true
+})
+
+$('btnCopyErrors').addEventListener('click', async () => {
+  const errText = state.results.filter(r => !r.ok).map(r => '❌ ' + r.name + ': ' + (r.error || '')).join('\n')
+  try {
+    await navigator.clipboard.writeText(errText)
+    log('已複製錯誤訊息', 'info')
+  } catch {
+    log('複製失敗', 'fail')
+  }
 })
 
 $('btnRetry').addEventListener('click', () => {
