@@ -72,7 +72,7 @@ async function updateServerStatus() {
 async function onServerStart() {
   const btn = $('btnServerStart')
   btn.disabled = true
-  btn.textContent = '啟動中...'
+  btn.textContent = '...'
   try {
     const resp = await chrome.runtime.sendMessage({ action: 'serverStart' })
     if (!resp || !resp.ok) {
@@ -85,7 +85,7 @@ async function onServerStart() {
     showToast('❌ 啟動失敗：' + e.message)
   } finally {
     btn.disabled = false
-    btn.textContent = '▶ 啟動伺服器'
+    btn.textContent = '▶'
   }
 }
 
@@ -96,7 +96,7 @@ async function onServerStop() {
     await new Promise(r => setTimeout(r, 1000))
     await updateServerStatus()
   } catch (e) {
-    showToast('❌ 停止失敗：' + e.message)
+    showToast('❌ ' + e.message)
   } finally {
     $('btnServerStop').disabled = false
   }
