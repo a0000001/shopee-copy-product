@@ -158,17 +158,24 @@ if (msg.action === 'clickSaveButton') {
 - `tab.url` 為 `undefined`（`chrome.tabs.create` 回傳時 navigation 尚未開始）
 - `waitForTabReady` 有等到 `status === 'complete'`
 
-**問題：** 為什麼對新開分頁的 `chrome.tabs.sendMessage` 拋出 `Illegal invocation`，而對已存在分頁正常？
-
-> 已在 `batch-upload.js` 加入 `console.log('[SGC] batch-upload tabId:', tab.id, 'url:', tab.url, 'status:', tab.status)` 可觀察。
+**Claude 分析（2026-07-22）：**
+- `chrome.tabs.sendMessage(tabId, {...})` 本身的呼叫方式正確，沒有解綁 this
+- 問題極可能出在 **content.js 內部**，而非 batch-upload.js
+- 常見成因：
+  1. `content.js` 裡有類似 `const send = chrome.runtime.sendMessage; send(...)` 抽出方法單獨呼叫
+  2. `waitForTabReady` 判斷 `status === 'complete'` 太早，SPA 導向後 content script context 被清空
+  3. `content_scripts.matches` 對 `product/new?from=sidebar` 沒有完全匹配
+- 需確認：console 完整 stack trace、content.js message listener 區塊、manifest content_scripts 設定
 
 ## 尚未確定的問題
 
-1. **Illegal invocation 根因** — `chrome.tabs.sendMessage` 對新開分頁失敗，但對已開啟分頁正常。`tab.url` 為 `undefined` 但 `tab.id` 有效。
+1. **Illegal invocation 根因** — `chrome.tabs.sendMessage` 對新開分頁失敗，但對已開啟分頁正常。`tab.url` 為 `undefined` 但 `tab.id` 有效。  
+   Claude 分析：問題可能在 content.js 內部（如解綁 this 的 Chrome API 呼叫、SPA 重導向時 content script context 被清空），而非 batch-upload.js。  
+   **需確認：** console 完整 stack trace、content.js message listener 區塊、manifest content_scripts 設定。
 
 2. **儲存按鈕的 selector** — `Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))` 需確認蝦皮 seller 頁面實際按鈕文字。
 
-3. **WAF 頻率限制** — 3 秒間隔是否足夠？需實際測試。
+3. **WAF 頻率限制** — 3 秒間隔是否足夠？需實際測試。可考慮加入指數退避與 429 偵測。
 
 ## Tasks
 
