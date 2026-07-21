@@ -203,8 +203,27 @@ function log(msg, type = 'info') {
   el.scrollIntoView({ behavior: 'smooth' })
 }
 
-async function sleep(ms) {
+// ── 工具函數 ──
+function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
+}
+
+// 等待分頁完全載入，且 content script 可通訊
+// content_scripts 設定 run_at: document_idle，故需等 status === 'complete'
+function waitForTabReady(tabId, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('分頁載入超時')), timeout)
+
+    function onUpdated(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(onUpdated)
+        clearTimeout(timer)
+        // 稍微再等一下讓 content script 初始化
+        setTimeout(() => resolve(), 500)
+      }
+    }
+    chrome.tabs.onUpdated.addListener(onUpdated)
+  })
 }
 
 async function fillAndSave(item, tabId) {
@@ -234,9 +253,17 @@ async function fillAndSave(item, tabId) {
     throw new Error(result?.error || 'fillAll 失敗')
   }
 
+  // 檢查個別欄位是否有失敗
+  // fillAll 回傳 { ok: true, results: [{ field, ok, error? }, ...] }
+  // ok=true 不代表每個欄位都成功，需檢查 results 中是否有 ok=false
+  const failedFields = (result.results || []).filter(r => !r.ok)
+  if (failedFields.length > 0) {
+    const errors = failedFields.map(r => `${r.field}: ${r.error || '未知'}`).join('; ')
+    throw new Error(`欄位填入失敗: ${errors}`)
+  }
+
   // 等待「儲存」按鈕啟用 + 點擊
-  // 問題：如何確定 fillAll 完成且表單可提交？
-  // 解法：fillAll 回傳後，等待一段時間讓 Vue 更新 DOM，再找儲存按鈕
+  // 解法：fillAll 回傳後，輪詢 checkSaveButton 直到按鈕可點擊
   for (let i = 0; i < 30; i++) {
     await sleep(500)
     try {
@@ -274,7 +301,7 @@ $('btnStart').addEventListener('click', async () => {
         url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
         active: false
       })
-      await sleep(3000)  // 等待頁面初始載入
+      await waitForTabReady(tab.id)
 
       await fillAndSave(item, tab.id)
 
@@ -351,13 +378,15 @@ $('btnBatchUpload').addEventListener('click', () => {
 
 ```javascript
 if (msg.action === 'checkSaveButton') {
-  const btn = document.querySelector('button:contains("儲存"), button:contains("保存"), button:contains("確認")')
+  const btns = document.querySelectorAll('button')
+  const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
   sendResponse({ ready: !!btn && !btn.disabled })
   return true
 }
 
 if (msg.action === 'clickSaveButton') {
-  const btn = document.querySelector('button:contains("儲存"), button:contains("保存"), button:contains("確認")')
+  const btns = document.querySelectorAll('button')
+  const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
   if (btn) { btn.click(); sendResponse({ ok: true }) }
   else sendResponse({ ok: false, error: '找不到儲存按鈕' })
   return true
@@ -366,13 +395,9 @@ if (msg.action === 'clickSaveButton') {
 
 ## 尚未確定的問題
 
-1. **`checkSaveButton` 的 selector** — `button:contains()` 不是標準 CSS selector。蝦皮 seller 頁面的儲存按鈕用什麼方式選取？需要先手動觀察 DOM。可能要用 `Array.from(document.querySelectorAll('button')).find(b => /儲存|保存|確認/.test(b.textContent))`
+1. **儲存按鈕的 selector** — 已修正為 `Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))`，但仍需到蝦皮 seller 後台實際頁面確認按鈕文字是否匹配（尤其是「儲存」按鈕在 Vue 元件中可能是 disabled 狀態，需確認 disabled 判斷邏輯正確）
 
-2. **`fillAll()` 的成功判斷** — `fillAll()` 目前回傳 `{ ok: true, results: [...] }`。但即使某些欄位失敗，`ok` 仍可能為 `true`。是否需要更嚴格的判斷？
-
-3. **分頁管理** — `chrome.tabs.create()` 建立的分頁在背景載入，content script 可能無法立即注入。需等待 tab 完全載入後再發送訊息。目前用 `sleep(3000)` 不太可靠，應該用 `chrome.tabs.onUpdated` 監聽 `complete` 狀態。
-
-4. **WAF 觸發** — 蝦皮可能對短時間大量新增商品有頻率限制。3 秒間隔是否足夠？是否需要動態調整（連續失敗時增加間隔）？
+2. **WAF 頻率限制** — 蝦皮可能對短時間大量新增商品有頻率限制。3 秒間隔是否足夠？是否需要動態調整（連續失敗時增加間隔）？需實際測試後才能確定。
 
 ## Tasks
 
@@ -407,8 +432,9 @@ Smoke test：
 1. 開啟 batch-upload.html
 2. 選取 `product-catalog-tw.json`
 3. 點「掃描已上架商品」→ 確認顯示已上架/待上傳筆數
-4. 點「開始上傳」→ 確認逐筆開分頁、填入、關分頁
-5. 確認完成頁顯示成功/失敗筆數
+4. 點「開始上傳」→ 確認逐筆開分頁（使用 `waitForTabReady` 等待載入）、填入、檢查 `fillAll` 回傳的 `results` 是否有失敗欄位、關分頁
+5. 手動中斷（關閉分頁）→ 重新掃描 → 確認已上傳的筆數被排除
+6. 確認完成頁顯示成功/失敗筆數
 
 ### Task 4: 整合測試
 
