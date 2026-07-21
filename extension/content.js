@@ -1347,14 +1347,14 @@
       return true
     }
     if (msg.action === 'fillProductData') {
-      fillAll(msg.data || {}).then(sendResponse)
+      fillAll(msg.data || {}).then(sendResponse).catch(e => sendResponse({ ok: false, error: e.message }))
       return true
     }
     if (msg.action === 'uploadMedia') {
       uploadMediaAsync(msg.data || {}).then(results => {
         const ok = results.every(r => r.ok)
         sendResponse({ ok, results })
-      })
+      }).catch(e => sendResponse({ ok: false, error: e.message }))
       return true
     }
     if (msg.action === 'extractSellerProductList') {
