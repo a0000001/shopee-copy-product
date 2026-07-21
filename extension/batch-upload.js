@@ -158,7 +158,6 @@ $('btnStart').addEventListener('click', async () => {
     try {
       tab = await chrome.tabs.create({
         url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
-        active: false
       })
       await waitForTabReady(tab.id)
 
