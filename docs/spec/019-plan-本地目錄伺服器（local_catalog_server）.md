@@ -136,6 +136,7 @@ python -c "import json; d=json.load(open('docs/data/product-catalog-tw.json')); 
 - 監聽 `localhost:9801`
 - 支援命令列參數 `--catalog-path` 指定目錄 JSON 路徑（預設 `docs/data/product-catalog-tw.json`），測試時可指向測試檔
 - 支援 GET `/health` 回 `{"ok":true}`
+- 支援 GET `/shutdown` 優雅關閉伺服器
 - 支援 POST `/append`
 - **CORS**：所有回應帶 `Access-Control-Allow-Origin: *`；OPTIONS preflight 回 200（處理方法同 GET）
 - **JSON 寫入**：`json.dump(..., ensure_ascii=False, indent=2)` + 開檔用 `encoding='utf-8'`，確保中文不逃逸
@@ -231,6 +232,63 @@ Options page（選項頁面）：
 }
 ```
 
+### Step 5：Native Messaging Host — Extension 直接啟動/停止伺服器 ✅（已完成）
+
+讓 extension 能透過 Chrome Native Messaging API 自動啟動/停止 `local-catalog-server.py`，不再需要手動跑指令。
+
+**架構**：
+
+```
+┌─────────────────────┐   chrome.runtime.connectNative    ┌──────────────────────────────────┐
+│  Extension           │  ◄──────────────────────────────► │  catalog-server-host.py          │
+│  background.js       │                                    │  (Native Messaging Host, Python) │
+│  (Service Worker)    │   stdin/stdout (4B-length JSON)    │                                  │
+└─────────────────────┘                                    │  ├ subprocess: local-catalog-    │
+                                                            │  │   server.py --catalog-path ... │
+                                                            │  └ HTTP /shutdown 優雅關閉       │
+                                                            └──────────────────────────────────┘
+```
+
+**新增檔案**：
+
+- `extension/native-messaging-host/catalog-server-host.py` — Native Messaging Host，接收 start/stop/status 指令，管理伺服器子行程
+- `extension/native-messaging-host/run_host.bat` — batch wrapper（Chrome 執行 native host 需要 .bat 或 .exe）
+- `extension/native-messaging-host/com.shopee.catalog_server.json` — Native manifest 模板（安裝時填入 extension ID）
+- `scripts/install-native-host.ps1` — 安裝腳本（填 ID + 註冊 HKCU 登錄）
+
+**修改檔案**：
+
+- `extension/background.js` — 新增 `connectNative`、處理 `serverStart`/`serverStop`/`serverStatus`/`serverHealthCheck` 四則訊息
+- `extension/manifest.json` — 加入 `"nativeMessaging"` 權限
+- `extension/popup.html` — 頂端加入伺服器狀態指示燈 + 啟動/停止按鈕
+- `extension/popup.js` — `updateServerStatus()` + `onServerStart()` + `onServerStop()`
+- `extension/options.html` — 加入伺服器狀態區塊 + Native Host 安裝說明
+- `extension/options.js` — 加入狀態更新、啟動/停止控制
+- `scripts/local-catalog-server.py` — 新增 `GET /shutdown` 端點供 native host 優雅關閉
+
+**安裝方式**：
+
+1. `chrome://extensions` → 啟用開發者模式 → 複製 extension ID（32 個小寫字母）
+2. 執行：
+   ```powershell
+   .\scripts\install-native-host.ps1 -ExtensionId 你的ID
+   ```
+3. `chrome://extensions` → 重新整理 extension
+
+**安裝後使用**：
+
+- 開啟 extension popup → 頂端會顯示伺服器狀態
+- 按「▶ 啟動伺服器」→ background.js 經 native host 啟動 `local-catalog-server.py`
+- 按「⏹ 停止」→ native host 請求 `/shutdown` 優雅關閉，必要時 kill
+- Options page 也有相同的狀態面板 + 啟動/停止按鈕
+
+**已知限制**：
+
+| 項目 | 說明 |
+|------|------|
+| 需手動安裝 Native Host | 一次性安裝，extension ID 變更時需重裝 |
+| Chrome 背景終止 Service Worker | 若 Chrome 殺掉 background.js，native port 斷線，伺服器不受影響（subprocess 獨立） |
+
 ---
 
 ## 已知限制
@@ -238,7 +296,7 @@ Options page（選項頁面）：
 | 項目 | 說明 |
 |------|------|
 | 只支援同機 localhost | extension 與 server 不能在不同機器 |
-| 伺服器需手動啟動 | 不提供開機自動啟動 |
+| Native Host 需手動安裝 | 一次性安裝 `install-native-host.ps1`，extension ID 變更時需重裝 |
 | 無 git commit | 寫入 JSON 後不自動版本控制 |
 | 無「更新既有商品」API | 目錄視為唯讀累加，若需修正既有資料請手動編輯 JSON（刻意設計） |
 | category 中文→ID 對照表 | 目前只有「電腦與周邊配件 > 軟體 = 100644,101937」，日後手動補 |
@@ -266,13 +324,16 @@ python -c "import json; d=json.load(open('docs/data/product-catalog-tw.json', en
 python scripts/test-catalog-server.py
 ```
 
-**涵蓋項目**：
-- 啟動伺服器 + 健康檢查
+**涵蓋項目**（44 項測試）：
+- 啟動伺服器 + 健康檢查 + `/shutdown` 端點
 - 成功寫入一筆新商品
 - 重複 url 跳過 + reason 檢查
 - 重複商品名稱跳過 + reason 檢查
+- Canonical URL（`shop_id:item_id`）比對，不同 query string 仍視為重複
+- 相似名稱（`difflib.SequenceMatcher >= 0.85`）→ `appended_with_warning`
 - 缺少必填欄位錯誤
 - 寫入後 JSON 無毀損
+- extension 程式碼檢查（popup.js/background.js/manifest/options/native host）
 - 自動清理測試檔並關閉伺服器
 
 ---
