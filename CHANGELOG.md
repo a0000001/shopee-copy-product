@@ -79,6 +79,10 @@
 - `content.js` — `uploadMediaAsync` 圖片上傳加入去重：先掃描頁面上已存在的圖片 URL，跳過重複，只下載不足 9 張的新圖片
 - `content.js` — 新增影片上傳：從 `data.videos` 讀取影片 URL，下載後注入 `[data-product-edit-field-unique-id="videos"]` 或 `video` 容器的 file input，最多上傳 1 部
 
+### 新增功能：自動目錄時若伺服器未啟動則自動啟動 (`33e91ee`)
+
+- `popup.js` — 新增 `ensureServerRunning()`：檢查伺服器狀態，未啟動時自動呼叫 `serverStart` 並等待啟動完成；勾選「更新JSON」時點擊複製，自動啟動伺服器後再寫入目錄
+
 ### 修正：伺服器面板改為圖示＋單一按鈕 (`9241a1f`)
 
 - `popup.html` — 伺服器狀態改為純圖示（`⚠` 未啟動／`●` 運行中／`◌` 旋轉檢查中），所有文字移至 `title` 屬性（hover 顯示）；啟動/停止合併為單一按鈕
