@@ -144,7 +144,7 @@ $('btnStart').addEventListener('click', async () => {
         url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
       })
       await waitForTabReady(tab.id)
-      console.log('[SGC] batch-upload tabId:', tab.id, 'url:', tab.url)
+      console.log('[SGC] batch-upload tabId:', tab.id, 'url:', tab.url, 'status:', tab.status)
 
       await fillAndSave(item, tab.id)
 
