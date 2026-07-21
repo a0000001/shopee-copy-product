@@ -45,7 +45,7 @@ def handle_message(msg):
             send_message({'type': 'status', 'running': True, 'port': SERVER_PORT})
             return
 
-        catalog_path = msg.get('catalog_path', CATALOG_PATH)
+        catalog_path = msg.get('catalog_path') or CATALOG_PATH
         cmd = [sys.executable, SERVER_SCRIPT, '--catalog-path', catalog_path]
         kwargs = dict(
             stdout=subprocess.DEVNULL,
