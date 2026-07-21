@@ -35,10 +35,10 @@ async function submitToCatalog(data) {
     } else if (result?.ok && result.action === 'skipped') {
       showToast('⏭ ' + result.reason)
     } else {
-      showToast('❌ ' + (result?.error || '伺服器錯誤'))
+      showErrorModal(result?.error || '伺服器錯誤')
     }
   } catch (e) {
-    showToast('❌ 無法連線 (' + _serverUrl + '): ' + e.message)
+    showErrorModal('無法連線 (' + _serverUrl + '): ' + e.message)
   }
 }
 
@@ -78,13 +78,13 @@ async function onServerStart() {
   try {
     const resp = await chrome.runtime.sendMessage({ action: 'serverStart' })
     if (!resp || !resp.ok) {
-      showToast('❌ ' + (resp?.error || '啟動失敗'))
+      showErrorModal(resp?.error || '啟動失敗')
       return
     }
     await new Promise(r => setTimeout(r, 1500))
     await updateServerStatus()
   } catch (e) {
-    showToast('❌ 啟動失敗：' + e.message)
+    showErrorModal('啟動失敗：' + e.message)
   } finally {
     btn.disabled = false
     btn.textContent = '▶'
@@ -98,7 +98,7 @@ async function onServerStop() {
     await new Promise(r => setTimeout(r, 1000))
     await updateServerStatus()
   } catch (e) {
-    showToast('❌ ' + e.message)
+    showErrorModal(e.message)
   } finally {
     $('btnServerStop').disabled = false
   }
@@ -109,6 +109,27 @@ function showToast(msg) {
   t.textContent = msg
   t.classList.add('show')
   setTimeout(() => t.classList.remove('show'), 2000)
+}
+
+function showErrorModal(msg) {
+  const modal = $('errorModal')
+  const body = $('errorModalBody')
+  body.textContent = msg
+  modal.style.display = 'flex'
+}
+
+function hideErrorModal() {
+  $('errorModal').style.display = 'none'
+}
+
+async function copyErrorToClipboard() {
+  const text = $('errorModalBody').textContent
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('已複製錯誤訊息')
+  } catch {
+    showToast('複製失敗')
+  }
 }
 
 function showError(msg) {
@@ -315,6 +336,8 @@ async function main() {
 
   $('btnServerStart').addEventListener('click', onServerStart)
   $('btnServerStop').addEventListener('click', onServerStop)
+  $('btnCloseError').addEventListener('click', hideErrorModal)
+  $('btnCopyError').addEventListener('click', copyErrorToClipboard)
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab) { showError('無法取得目前分頁'); return }
