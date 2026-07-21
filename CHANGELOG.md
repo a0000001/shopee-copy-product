@@ -19,7 +19,7 @@
 ### 修正
 
 - `019-plan` — 去重規則補上空字串陷阱防護（兩側皆空時不比對）；server 路徑不一致修正；CORS + OPTIONS preflight 處理；manifest host_permissions 改為 `http://localhost/*`（配合 options page 可修改 port）；類別查無對照時留空 + 印警告；JSON 寫入指定 `ensure_ascii=False`；轉換腳本加入重複執行保護；寫入原子性（暫存檔 + rename）；reason 回應動態產生
-- `popup.html` — 類別下拉預設選中「電腦與周邊配件 &gt; 軟體」（`selected` 屬性），避免每次手動選擇
+- `popup.html` — 類別下拉預設選中「電腦與周邊配件 &gt; 軟體」（`selected` 屬性），避免每次手動選擇；價格、庫存、尺寸改為同一行水平排列節省版面；移除「用AI更新JSON」按鈕（與「複製到剪貼簿」功能重複）
 - `background.js` — `serverStart` 改為非同步等待 Native Host 回應，不再立即回 `{ok: true}`，避免啟動失敗沒被發現
 - `popup.js` — `onServerStart()` 檢查 `serverStart` 的回應，若 `ok: false` 直接顯示錯誤訊息，不等到 3 秒後才發現
 - `install-native-host.ps1` — 重寫為純 ASCII 解決 PowerShell 編碼錯誤；改為 `ConvertTo-Json` 物件建構，避免字串取代產生無效 JSON（單反斜線）；新增 `-ExtensionId` 改為選填，可從 `.env` 讀取 `EXTENSION_ID`

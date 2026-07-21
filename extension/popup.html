@@ -46,6 +46,8 @@
     .btn-server { padding: 4px 10px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; }
     .btn-server.start { background: #26aa99; color: #fff; }
     .btn-server.stop { background: #e74c3c; color: #fff; }
+    .field-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .field-item { flex: 1; }
   </style>
 </head>
 <body>
@@ -76,13 +78,19 @@
       <div class="label">商品標題</div>
       <div id="title" class="value"></div>
     </div>
-    <div class="section">
-      <div class="label">價格</div>
-      <div id="price" class="value"></div>
-    </div>
-    <div class="section">
-      <div class="label">庫存</div>
-      <input id="ps_stock" type="number" value="999" min="0" class="value" style="width:100px">
+    <div class="field-row">
+      <div class="field-item">
+        <div class="label">價格</div>
+        <div id="price" class="value"></div>
+      </div>
+      <div class="field-item">
+        <div class="label">庫存</div>
+        <input id="ps_stock" type="number" value="999" min="0" class="value" style="width:90px">
+      </div>
+      <div class="field-item">
+        <div class="label">尺寸</div>
+        <div class="value" style="font-size:12px;color:#888;white-space:nowrap">10×10×4 cm</div>
+      </div>
     </div>
     <div class="section">
       <div class="label">類別</div>
@@ -90,10 +98,6 @@
         <option value="">-- 請選擇類別 --</option>
         <option value="100644,101937" selected>電腦與周邊配件 &gt; 軟體</option>
       </select>
-    </div>
-    <div class="section">
-      <div class="label">尺寸</div>
-      <div class="value" style="font-size:12px;color:#888">10 x 10 x 4 cm（固定）</div>
     </div>
     <div class="section">
       <div class="label">商品描述</div>
@@ -111,7 +115,6 @@
       <button id="btnCatalog" class="btn-primary">送出至目錄</button>
       <button id="btnDownload" class="btn-success">下載圖片 + 影片</button>
       <button id="btnCopy" class="btn-secondary">複製到剪貼簿</button>
-      <button id="btnAI" class="btn-secondary" style="margin-left:auto">用AI更新JSON</button>
     </div>
   </div>
   <div id="error" class="value error" style="display:none"></div>

@@ -280,14 +280,6 @@ function initExtractMode(tab) {
     }
   })
 
-  $('btnAI').addEventListener('click', () => {
-    const data = window._sgcData
-    if (!data) { showToast('無資料'); return }
-    navigator.clipboard.writeText(toJsonClipboard(data)).then(() => {
-      showToast('已複製 JSON，請貼到 AI 工具')
-    }).catch(() => showToast('複製失敗'))
-  })
-
   $('btnDownload').addEventListener('click', async () => {
     const data = window._sgcData
     if (!data) { showToast('無資料'); return }
