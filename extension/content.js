@@ -1325,12 +1325,14 @@
     }
 
     // 處理媒體自動下載與上傳
-    try {
-      const mediaResults = await uploadMediaAsync(data)
-      results.push(...mediaResults)
-    } catch (e) {
-      console.error('[SGC] Media upload error:', e)
-      results.push({ field: '媒體上傳', ok: false, error: e.message })
+    if (!data.skipMedia) {
+      try {
+        const mediaResults = await uploadMediaAsync(data)
+        results.push(...mediaResults)
+      } catch (e) {
+        console.error('[SGC] Media upload error:', e)
+        results.push({ field: '媒體上傳', ok: false, error: e.message })
+      }
     }
 
     return { ok: true, results }
@@ -1345,8 +1347,15 @@
       return true
     }
     if (msg.action === 'fillProductData') {
-      fillAll(msg.data || {}).catch(e => console.error('[SGC] fillAll error:', e))
-      sendResponse({ ok: true })
+      fillAll(msg.data || {}).then(sendResponse)
+      return true
+    }
+    if (msg.action === 'uploadMedia') {
+      uploadMediaAsync(msg.data || {}).then(results => {
+        const ok = results.every(r => r.ok)
+        sendResponse({ ok, results })
+      })
+      return true
     }
     if (msg.action === 'extractSellerProductList') {
       sendResponse(extractSellerProductList())

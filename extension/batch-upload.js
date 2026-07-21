@@ -106,14 +106,27 @@ async function fillAndSave(item, tabId) {
     installment: item.installment || 24,
     ps_item_cover_image: item.ps_item_cover_image || '',
     url: item.url || '',
+    skipMedia: true,
   }
 
   const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data })
 
-  // fillAll 已改為 fire-and-forget：立即回傳 { ok: true }
-  // 實際填入結果透過 checkSaveButton 輪詢確認
   if (!result || !result.ok) {
-    throw new Error((result && result.error) || 'fillAll 啟動失敗')
+    throw new Error((result && result.error) || 'fillAll 失敗')
+  }
+
+  // 第二段：上傳媒體
+  const mediaData = {
+    images: item.images || [],
+    videos: item.videos || [],
+    title: item.ps_product_name,
+  }
+  if (item.ps_item_cover_image) {
+    mediaData.images.unshift(item.ps_item_cover_image)
+  }
+  const mediaResult = await chrome.tabs.sendMessage(tabId, { action: 'uploadMedia', data: mediaData })
+  if (!mediaResult || !mediaResult.ok) {
+    log('⚠️ ' + item.ps_product_name + ': 媒體上傳失敗 (' + ((mediaResult && mediaResult.error) || '未知') + ')', 'fail')
   }
 
   for (let i = 0; i < 60; i++) {
