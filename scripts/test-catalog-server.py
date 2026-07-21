@@ -141,10 +141,11 @@ print("\n=== 3. 確認 Extension 程式碼 ===\n")
 popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
 check("popup.js 含 submitToCatalog", "function submitToCatalog" in popup_js)
 check("popup.js 含 loadServerUrl", "async function loadServerUrl" in popup_js)
-check("popup.js 含 btnCatalog 監聽", "btnCatalog" in popup_js)
+check("popup.js 含自動目錄 checkbox", "chkAutoCatalog" in popup_js)
+check("popup.js 含 btnCopy 監聽", "btnCopy" in popup_js)
 
 popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
-check("popup.html 含 btnCatalog", "btnCatalog" in popup_html)
+check("popup.html 含 chkAutoCatalog", "chkAutoCatalog" in popup_html)
 
 manifest = json.loads((BASE / "extension" / "manifest.json").read_text(encoding="utf-8"))
 check("manifest 含 options_page", "options_page" in manifest)

@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id)
 
 const DEFAULT_SERVER = 'http://localhost:9801'
+const STORAGE_KEY_AUTO_CATALOG = 'autoCatalogOnCopy'
 
 let _serverUrl = DEFAULT_SERVER
 
@@ -13,6 +14,42 @@ async function loadServerUrl() {
   } catch {
     // 無 storage 權限或首次使用，維持預設
   }
+}
+
+async function loadAutoCatalogSetting() {
+  try {
+    const result = await chrome.storage.sync.get(STORAGE_KEY_AUTO_CATALOG)
+    const checked = result[STORAGE_KEY_AUTO_CATALOG] === true
+    const chk = $('chkAutoCatalog')
+    if (chk) {
+      chk.checked = checked
+      chk.parentElement.classList.toggle('checked', checked)
+    }
+  } catch { }
+}
+
+async function saveAutoCatalogSetting(checked) {
+  try {
+    await chrome.storage.sync.set({ [STORAGE_KEY_AUTO_CATALOG]: checked })
+  } catch { }
+}
+
+function initAutoCatalogCheckbox() {
+  const chk = $('chkAutoCatalog')
+  if (!chk) return
+  chk.addEventListener('change', async () => {
+    if (chk.checked) {
+      chk.parentElement.classList.add('checked')
+      await saveAutoCatalogSetting(true)
+    } else {
+      if (!confirm('確定要關閉「複製時自動更新JSON至目錄」功能？')) {
+        chk.checked = true
+        return
+      }
+      chk.parentElement.classList.remove('checked')
+      await saveAutoCatalogSetting(false)
+    }
+  })
 }
 
 async function submitToCatalog(data) {
@@ -288,12 +325,6 @@ function initExtractMode(tab) {
     showError('通訊失敗：' + e.message)
   })
 
-  $('btnCatalog').addEventListener('click', async () => {
-    const data = window._sgcData
-    if (!data) { showToast('無資料'); return }
-    await submitToCatalog(data)
-  })
-
   $('btnCopy').addEventListener('click', async () => {
     const data = window._sgcData
     if (!data) { showToast('無資料'); return }
@@ -302,6 +333,10 @@ function initExtractMode(tab) {
       showToast('已複製 JSON 到剪貼簿！')
     } catch (e) {
       showToast('複製失敗：' + e.message)
+      return
+    }
+    if ($('chkAutoCatalog')?.checked) {
+      await submitToCatalog(data)
     }
   })
 
@@ -332,7 +367,9 @@ function initExtractMode(tab) {
 
 async function main() {
   await loadServerUrl()
+  await loadAutoCatalogSetting()
   updateServerStatus()
+  initAutoCatalogCheckbox()
 
   $('btnServerStart').addEventListener('click', onServerStart)
   $('btnServerStop').addEventListener('click', onServerStop)

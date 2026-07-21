@@ -58,6 +58,12 @@
 - `popup.html` — 新增 Modal 結構（`.modal-overlay`、`.modal-box`、`.modal-body`）與「複製錯誤訊息」按鈕
 - `popup.js` — 新增 `showErrorModal()`、`hideErrorModal()`、`copyErrorToClipboard()`；`submitToCatalog`、`onServerStart`、`onServerStop` 的錯誤改為 Modal 顯示，可換行、可滾動、按 ✕ 才關閉，不再一閃即過
 
+### 新增功能：複製時自動更新目錄（取代獨立「送出至目錄」按鈕）
+
+- `popup.html` — 移除「送出至目錄」按鈕；「複製到剪貼簿」改為按鈕主色（`#ee4d2d`）；新增核選方塊「更新JSON」及 `.copy-option` 樣式
+- `popup.js` — 新增 `loadAutoCatalogSetting`、`saveAutoCatalogSetting`、`initAutoCatalogCheckbox`；`btnCopy` 點擊後若 checkbox 勾選，複製完 JSON 自動呼叫 `submitToCatalog`；checkbox 狀態存入 `chrome.storage.sync`；反核選時彈出 `confirm` 確認
+- `scripts/test-catalog-server.py` — 測試更新為檢查 `chkAutoCatalog` 取代 `btnCatalog`，增加 1 項測試（共 51 項）
+
 ## 2026-07-20
 
 ### 修正
