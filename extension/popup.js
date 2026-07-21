@@ -36,7 +36,7 @@ async function submitToCatalog(data) {
       showToast('❌ ' + (result.error || '伺服器錯誤'))
     }
   } catch (e) {
-    showToast('❌ 無法連線到目錄伺服器')
+    showToast('❌ 無法連線 (' + _serverUrl + '): ' + e.message)
   }
 }
 
