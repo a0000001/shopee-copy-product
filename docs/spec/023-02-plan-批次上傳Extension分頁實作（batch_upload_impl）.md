@@ -172,11 +172,15 @@ $('btnScan').addEventListener('click', async () => {
   $('btnScan').disabled = true
   $('btnScan').textContent = '掃描中...'
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (!tab || !tab.url.includes('seller.shopee.tw')) {
+    // 不在 active 找，而是遍歷當前視窗所有分頁
+    // 因為 batch-upload.html 用 chrome.tabs.create() 開新分頁後，
+    // 新分頁會變成 active，原本的 seller 分頁不再是 active
+    const tabs = await chrome.tabs.query({ currentWindow: true })
+    const sellerTab = tabs.find(t => t.url && t.url.includes('seller.shopee.tw'))
+    if (!sellerTab) {
       throw new Error('請先在賣家頁面開啟此功能')
     }
-    const resp = await chrome.tabs.sendMessage(tab.id, { action: 'extractSellerProductList' })
+    const resp = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
     const products = resp || []
     state.existingNames = new Set(products.map(p => p.name))
     state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
