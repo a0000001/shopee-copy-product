@@ -389,24 +389,26 @@ function initExtractMode(tab) {
   $('btnDownload').addEventListener('click', async () => {
     const data = window._sgcData
     if (!data) { showToast('無資料'); return }
-    if (!data.images.length && !data.videos.length) { showToast('沒有可下載的檔案'); return }
     $('btnDownload').disabled = true
     $('btnDownload').textContent = '下載中...'
     try {
+      const started = await ensureServerRunning()
+      if (!started) return
       const resp = await chrome.runtime.sendMessage({
-        action: 'download',
-        images: data.images,
-        videos: data.videos,
-        title: data.title
+        action: 'saveRawProductData',
+        data: data,
+        serverUrl: _serverUrl
       })
-      const total = (resp?.results || []).length
-      const ok = (resp?.results || []).filter(r => !r.error).length
-      showToast(`下載完成：${ok}/${total} 個檔案`)
+      if (resp?.ok) {
+        showToast('✅ 已儲存原始資料')
+      } else {
+        showErrorModal(resp?.error || '儲存失敗')
+      }
     } catch (e) {
       showToast('下載失敗：' + e.message)
     } finally {
       $('btnDownload').disabled = false
-      $('btnDownload').textContent = '下載圖片 + 影片'
+      $('btnDownload').textContent = '下載資料'
     }
   })
 }

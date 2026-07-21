@@ -210,6 +210,31 @@ check("伺服器含 urllib.request", "urllib.request" in server_py)
 spec_022 = BASE / "docs" / "spec" / "022-plan-批量自動上傳與多帳號機制（batch_upload_multi_account）.md"
 check("022 spec 文件存在", spec_022.exists())
 
+# ── Step 5: 驗證精簡化（統一儲存路徑、移除雙層冗餘） ──
+print("\n=== 5. 驗證精簡化（統一儲存路徑、移除雙層冗餘） ===\n")
+
+bg_js = (BASE / "extension" / "background.js").read_text(encoding="utf-8")
+check("background.js 已無 handleDownloads", "handleDownloads" not in bg_js)
+check("background.js 已無 download action handler", "action === 'download'" not in bg_js and "action === \"download\"" not in bg_js)
+check("background.js saveRawProductData 使用 serverUrl 參數", "serverUrl" in bg_js)
+
+popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
+check("popup 按鈕改為下載資料", "下載資料" in popup_html)
+check("popup 已無舊按鈕下載圖片+影片", "下載圖片 + 影片" not in popup_html)
+
+popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
+check("popup.js 下載按鈕使用 saveRawProductData", "saveRawProductData" in popup_js)
+check("popup.js 已無舊 download action", "action: 'download'" not in popup_js and "action: \"download\"" not in popup_js)
+
+content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
+check("content.js 含 shop_name 提取", "shop_name" in content_js)
+check("content.js shop_name 從 __INITIAL_STATE__ 提取", "account?.username" in content_js or "account.username" in content_js)
+
+server_py = (BASE / "scripts" / "local-catalog-server.py").read_text(encoding="utf-8")
+check("伺服器路徑含 shop_name", "shop_name" in server_py)
+check("伺服器 RAW_DATA_PATH 預設為 E:/proj/shopee", "E:/proj/shopee" in server_py)
+check("伺服器 RAW_DATA_PATH 不含 mazz68", "E:/proj/shopee/mazz68" not in server_py)
+
 # ── Results ──
 print(f"\n{'='*40}")
 print(f"通過：{passed}  失敗：{failed}")

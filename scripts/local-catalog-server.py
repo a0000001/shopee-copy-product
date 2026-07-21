@@ -15,7 +15,7 @@ DEFAULT_CATALOG = PROJECT_DIR / "docs" / "data" / "product-catalog-tw.json"
 SIMILARITY_THRESHOLD = 0.85
 
 catalog_path: Path = DEFAULT_CATALOG
-RAW_DATA_PATH = Path(os.environ.get("SGC_RAW_DATA_PATH", "E:/proj/shopee/mazz68"))
+RAW_DATA_PATH = Path(os.environ.get("SGC_RAW_DATA_PATH", "E:/proj/shopee"))
 LOG_FILE = Path(os.environ.get("TEMP", ".")) / "sgc-server-log.txt"
 
 
@@ -216,7 +216,10 @@ class Handler(BaseHTTPRequestHandler):
         title = product.get("title", product.get("ps_product_name", "shopee_product"))
         safe_name = re.sub(r'[<>:"/\\|?*]', '_', title)[:100]
 
-        product_dir = RAW_DATA_PATH / safe_name
+        shop_name = product.get("shop_name", "mazz68")
+        safe_shop = re.sub(r'[<>:"/\\|?*]', '_', shop_name)[:50]
+
+        product_dir = RAW_DATA_PATH / safe_shop / safe_name
         product_dir.mkdir(parents=True, exist_ok=True)
 
         # 儲存 JSON

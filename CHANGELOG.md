@@ -6,15 +6,24 @@
 
 ### 新增功能：022 批量自動上傳、多帳號機制、擴充 Extension 功能
 
-- `extension/content.js` — 新增 `extractSellerProductList()` 從我的商品列表頁 DOM 爬取已上架 SKU；新增 `window.postMessage` handler 讓 CDP 可直接觸發 `fillProductData`、`extractSellerProductList`、`getProductData`；`extractProductData()` 成功後自動觸發 `saveRawProductData` 儲存原始資料至本地
-- `extension/background.js` — 新增 `saveRawProductData()` 函數，將商品資料（JSON + 圖片 + 影片）存到 `Downloads/ShopeeRawData/{商品標題}/`；同時嘗試同步至目錄伺服器 `/saveRawProductData` 端點
-- `scripts/local-catalog-server.py` — 新增 `/saveRawProductData` POST 端點，接受完整產品資料，建立 `{title}/images/` 和 `{title}/videos/` 子資料夾，從 URL 下載圖片（最多 9 張）與影片（最多 1 部）到 `E:\proj\shopee\mazz68\{title}\`（可透過環境變數 `SGC_RAW_DATA_PATH` 覆蓋）
-- `scripts/test-catalog-server.py` — 新增 Step 4 共 9 項測試，驗證 `extractSellerProductList`、`postMessage` handler、`saveRawProductData`、伺服器端點、022 spec 文件
+- `extension/content.js` — 新增 `extractSellerProductList()` 從我的商品列表頁 DOM 爬取已上架 SKU；新增 `window.postMessage` handler 讓 CDP 可直接觸發 `fillProductData`、`extractSellerProductList`、`getProductData`；`extractProductData()` 成功後自動觸發 `saveRawProductData` 經目錄伺服器端點儲存原始資料；新增 `shop_name` 從 `__INITIAL_STATE__` 提取，用於決定儲存路徑
+- `extension/background.js` — 新增 `saveRawProductData()` 函數，直接 POST 到目錄伺服器 `/saveRawProductData` 端點（不再經 Downloads 下載），支援 `serverUrl` 參數
+- `scripts/local-catalog-server.py` — 新增 `/saveRawProductData` POST 端點，接受完整產品資料，建立 `{shop_name}/images/` 和 `{shop_name}/videos/` 子資料夾，從 URL 下載圖片（最多 9 張）與影片（最多 1 部）到 `E:\proj\shopee\{shop_name}\{title}\`（可透過環境變數 `SGC_RAW_DATA_PATH` 覆蓋基底路徑）
+- `scripts/test-catalog-server.py` — 新增 Step 4 共 9 項測試 + Step 5 共 11 項測試，驗證 `extractSellerProductList`、`postMessage` handler、`saveRawProductData`、伺服器端點、022 spec 文件、精簡化驗證
 - `docs/spec/022-plan-批量自動上傳與多帳號機制（batch_upload_multi_account）.md` — 完整實作計畫，含批量上傳流程圖、多帳號切換方案、優先順序
 
 ### 修正
 
 - `local-catalog-server.py` — `do_POST` 重構為 `_handle_append` 與 `_handle_save_raw` 兩個方法，路由從 if-else 改為 elif 分支
+
+### 精簡化：移除雙層儲存、統一「下載資料」按鈕
+
+- `background.js` — 移除 `saveRawProductData()` 中的 `chrome.downloads.download` 邏輯（JSON/圖片/影片下載到 Downloads），改為僅 POST 到目錄伺服器 `/saveRawProductData` 端點；移除 `handleDownloads()` 函數及對應的 `action: 'download'` handler；`saveRawProductData` 新增 `serverUrl` 參數支援設定頁面自訂埠號
+- `local-catalog-server.py` — `RAW_DATA_PATH` 預設改為 `E:/proj/shopee`（基底路徑，不再含商場名稱）；`_handle_save_raw` 從請求資料讀取 `shop_name`（預設 `mazz68`），路徑改為 `{RAW_DATA_PATH}/{shop_name}/{title}`；`shop_name` 由 `content.js` 從 `__INITIAL_STATE__` 提取
+- `content.js` — `extractProductData()` 新增 `shop_name` 從 `__INITIAL_STATE__` 的 `productDetail.shop.account.username` 提取
+- `popup.html` — 下載按鈕改為「下載資料」
+- `popup.js` — 下載按鈕改為呼叫 `saveRawProductData` 經伺服器端點儲存，自動啟動伺服器若未運行
+- `scripts/test-catalog-server.py` — 新增 Step 5 共 11 項測試，驗證精簡化：`handleDownloads` 已移除、按鈕已合併、伺服器路徑含 `shop_name`、`RAW_DATA_PATH` 預設值正確
 
 ### 新增功能：019 本地目錄伺服器 — Extension 一鍵寫入商品目錄
 

@@ -93,92 +93,27 @@ async function appendToCatalog(serverUrl, product) {
   }
 }
 
-async function saveRawProductData(data) {
-  const title = data.title || 'shopee_product'
-  const safeName = safeFolderName(title)
-  const productPath = `ShopeeRawData/${safeName}`
-
-  const results = { saved: [], errors: [] }
-
-  // 1. 儲存 JSON 資料（到 Downloads/ShopeeRawData/{title}/）
-  const jsonStr = JSON.stringify(data, null, 2)
-  const jsonBlob = new Blob([jsonStr], { type: 'application/json' })
-  const jsonUrl = URL.createObjectURL(jsonBlob)
+async function saveRawProductData(data, serverUrl = 'http://localhost:9801') {
   try {
-    const id = await chrome.downloads.download({
-      url: jsonUrl,
-      filename: `${productPath}/${safeName}.json`,
-      conflictAction: 'uniquify'
-    })
-    results.saved.push({ type: 'json', id })
-  } catch (e) {
-    results.errors.push({ type: 'json', error: e.message })
-  }
-  setTimeout(() => URL.revokeObjectURL(jsonUrl), 60000)
-
-  // 2. 下載圖片
-  const images = Array.isArray(data.images) ? data.images : []
-  for (let i = 0; i < images.length; i++) {
-    try {
-      const converted = await toJpgDataUrl(images[i], true).catch(e => {
-        if (e.message === 'SKIP_PNG') throw e
-        return null
-      })
-      const downloadUrl = converted || images[i]
-      const id = await chrome.downloads.download({
-        url: downloadUrl,
-        filename: `${productPath}/images/${safeName}_${i + 1}.jpg`,
-        conflictAction: 'uniquify'
-      })
-      results.saved.push({ type: 'image', index: i, id })
-    } catch (e) {
-      if (e.message === 'SKIP_PNG') {
-        results.saved.push({ type: 'image', index: i, skipped: true, reason: 'PNG' })
-      } else {
-        results.errors.push({ type: 'image', index: i, error: e.message })
-      }
-    }
-  }
-
-  // 3. 下載影片
-  const videos = Array.isArray(data.videos) ? data.videos : []
-  for (let i = 0; i < videos.length; i++) {
-    try {
-      const id = await chrome.downloads.download({
-        url: videos[i],
-        filename: `${productPath}/videos/${safeName}_video_${i + 1}.mp4`,
-        conflictAction: 'uniquify'
-      })
-      results.saved.push({ type: 'video', index: i, id })
-    } catch (e) {
-      results.errors.push({ type: 'video', index: i, error: e.message })
-    }
-  }
-
-  // 4. 嘗試同步到目錄伺服器（若正在運行，存到 E:\proj\shopee\mazz68\）
-  try {
-    const resp = await fetch('http://localhost:9801/saveRawProductData', {
+    const resp = await fetch(serverUrl + '/saveRawProductData', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product: data }),
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(30000)
     })
     if (resp.ok) {
-      const serverResult = await resp.json()
-      results.serverSync = serverResult
+      const result = await resp.json()
+      return { ok: true, ...result }
+    } else {
+      const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }))
+      return { ok: false, error: err.error || `HTTP ${resp.status}` }
     }
-  } catch {
-    // 伺服器不在運行中，忽略
+  } catch (e) {
+    return { ok: false, error: e.message }
   }
-
-  return { ok: true, results }
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === 'download') {
-    handleDownloads(msg).then(sendResponse)
-    return true
-  }
   if (msg.action === 'fetchBlob') {
     fetchBlobAsBase64(msg.url)
       .then(res => sendResponse({ ok: true, data: res }))
@@ -198,7 +133,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true
   }
   if (msg.action === 'saveRawProductData') {
-    saveRawProductData(msg.data || {})
+    saveRawProductData(msg.data || {}, msg.serverUrl || 'http://localhost:9801')
       .then(sendResponse)
       .catch(err => sendResponse({ ok: false, error: err.message }))
     return true
@@ -292,63 +227,6 @@ async function toJpgDataUrl(url, skipPng = false) {
     binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, bytes.length)))
   }
   return `data:image/jpeg;base64,${btoa(binary)}`
-}
-
-async function handleDownloads(msg) {
-  const results = []
-  const { images, videos, title } = msg
-  const safeName = safeFolderName(title || 'shopee_product')
-
-  if (Array.isArray(images)) {
-    for (let i = 0; i < images.length; i++) {
-      const url = images[i]
-      try {
-        // 一律嘗試轉 JPG，不依賴 URL 副檔名（CDN URL 通常無副檔名，無法靠 .png/.jpg 判斷）
-        // 傳入 true 於 fetch 時偵測若是 PNG 則排除不下載
-        const converted = await toJpgDataUrl(url, true).catch(e => {
-          if (e.message === 'SKIP_PNG') {
-            throw e
-          }
-          console.warn('[SGC] toJpgDataUrl failed, fallback to original url:', url, e)
-          return null
-        })
-        const downloadUrl = converted || url
-        const path = `${safeName}/images/${safeName}_${i + 1}.jpg`
-        console.log('[SGC] downloading to', path)
-        const id = await chrome.downloads.download({
-          url: downloadUrl,
-          filename: path,
-          conflictAction: 'uniquify'
-        })
-        results.push({ type: 'image', index: i, id })
-      } catch (e) {
-        if (e.message === 'SKIP_PNG') {
-          console.log('[SGC] png image skipped:', url)
-          results.push({ type: 'image', index: i, skipped: true, reason: 'PNG' })
-          continue
-        }
-        console.error('[SGC] download image failed:', e)
-        results.push({ type: 'image', index: i, error: e.message })
-      }
-    }
-  }
-
-  if (Array.isArray(videos)) {
-    for (let i = 0; i < videos.length; i++) {
-      try {
-        const id = await chrome.downloads.download({
-          url: videos[i],
-          filename: `${safeName}/videos/${safeName}_video_${i + 1}.mp4`,
-          conflictAction: 'uniquify'
-        })
-        results.push({ type: 'video', index: i, id })
-      } catch (e) {
-        results.push({ type: 'video', index: i, error: e.message })
-      }
-    }
-  }
-
-  return { success: true, results }
 }
 
 async function fetchBlobAsBase64(url) {

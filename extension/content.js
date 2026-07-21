@@ -45,7 +45,9 @@
           const jsonStr = text.replace(/^[^=]*=\s*/, '').replace(/;?\s*$/, '')
           const data = JSON.parse(jsonStr)
           const product = data?.productDetail?.product || data?.product || data?.item || data?.pageData?.product || {}
+          const shop = data?.productDetail?.shop || data?.shop || {}
           const r = { title: '', price: '', description: '', images: [], videos: [] }
+          r.shop_name = shop?.account?.username || shop?.username || ''
           if (product.name) r.title = product.name
           if (product.price) r.price = (product.price / 100000).toString()
           if (product.price_max) r.price = `${r.price} ~ ${product.price_max / 100000}`
@@ -527,6 +529,23 @@
     data.title = (data.title || document.title || '').replace(/\s*\|\s*蝦皮購物\s*$/, '')
     data.url = window.location.href
     if (ids) { data.shopid = ids.shopid; data.itemid = ids.itemid }
+
+    // ── 嘗試取得商場名稱（若尚未從 __INITIAL_STATE__ 取得） ──
+    if (!data.shop_name) {
+      const scripts = document.querySelectorAll('script')
+      for (const s of scripts) {
+        const text = s.textContent || ''
+        if (text.includes('window.__INITIAL_STATE__')) {
+          try {
+            const jsonStr = text.replace(/^[^=]*=\s*/, '').replace(/;?\s*$/, '')
+            const initData = JSON.parse(jsonStr)
+            const shop = initData?.productDetail?.shop || initData?.shop || {}
+            data.shop_name = shop?.account?.username || shop?.username || ''
+          } catch {}
+          break
+        }
+      }
+    }
 
     // ── 儲存原始資料到本地（fire-and-forget，不影響回傳） ──
     chrome.runtime.sendMessage({ action: 'saveRawProductData', data: data }).catch(() => {})
