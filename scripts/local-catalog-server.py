@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import re
+import time
+from datetime import datetime
 from difflib import SequenceMatcher
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -12,6 +14,16 @@ DEFAULT_CATALOG = PROJECT_DIR / "docs" / "data" / "product-catalog-tw.json"
 SIMILARITY_THRESHOLD = 0.85
 
 catalog_path: Path = DEFAULT_CATALOG
+LOG_FILE = Path(os.environ.get("TEMP", ".")) / "sgc-server-log.txt"
+
+
+def log_request(method, path, status="", note=""):
+    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {method} {path} -> {status} {note}\n")
+    except:
+        pass
 
 
 def canonical_product_id(url):
@@ -79,57 +91,74 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        log_request("OPTIONS", self.path, "200")
         self._send_json(200, {})
 
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/health":
+            log_request("GET", "/health", "200")
             self._send_json(200, {"ok": True})
         elif parsed.path == "/shutdown":
+            log_request("GET", "/shutdown", "200")
             self._send_json(200, {"ok": True, "message": "shutting down"})
             import threading
             threading.Thread(target=self.server.shutdown, daemon=True).start()
         else:
+            log_request("GET", self.path, "404")
             self._send_json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path != "/append":
-            self._send_json(404, {"ok": False, "error": "not found"})
-            return
-
-        length = int(self.headers.get("Content-Length", 0))
-        if length == 0:
-            self._send_json(400, {"ok": False, "error": "empty body"})
-            return
-
+        log_request("POST", parsed.path, "start", f"CL={self.headers.get('Content-Length', '?')} Origin={self.headers.get('Origin', '?')}")
         try:
-            body = json.loads(self.rfile.read(length))
-        except json.JSONDecodeError:
-            self._send_json(400, {"ok": False, "error": "invalid JSON"})
-            return
+            if parsed.path != "/append":
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
 
-        product = body.get("product", {})
-        if not product.get("ps_product_name"):
-            self._send_json(400, {"ok": False, "error": "缺少 ps_product_name"})
-            return
+            length = int(self.headers.get("Content-Length", 0))
+            if length == 0:
+                self._send_json(400, {"ok": False, "error": "empty body"})
+                return
 
-        catalog = load_catalog()
-        action, reason, _ = check_duplicate(product, catalog)
+            try:
+                body = json.loads(self.rfile.read(length))
+            except json.JSONDecodeError:
+                self._send_json(400, {"ok": False, "error": "invalid JSON"})
+                return
 
-        if action == "skipped":
-            self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
-            return
+            product = body.get("product", {})
+            if not product.get("ps_product_name"):
+                self._send_json(400, {"ok": False, "error": "缺少 ps_product_name"})
+                return
 
-        catalog.append(product)
-        save_catalog(catalog)
+            catalog = load_catalog()
+            action, reason, _ = check_duplicate(product, catalog)
 
-        resp = {"ok": True, "action": "appended", "catalog_size": len(catalog)}
-        if action == "appended_with_warning":
-            resp["action"] = "appended_with_warning"
-            resp["reason"] = reason
+            if action == "skipped":
+                log_request("POST", "/append", "200-skipped")
+                self._send_json(200, {"ok": True, "action": "skipped", "reason": reason})
+                return
 
-        self._send_json(200, resp)
+            catalog.append(product)
+            save_catalog(catalog)
+
+            resp = {"ok": True, "action": "appended", "catalog_size": len(catalog)}
+            if action == "appended_with_warning":
+                resp["action"] = "appended_with_warning"
+                resp["reason"] = reason
+
+            log_request("POST", "/append", "200-appended")
+            self._send_json(200, resp)
+        except Exception as e:
+            import traceback
+            err = f"{type(e).__name__}: {e}"
+            log_request("POST", parsed.path, "CRASH", err)
+            traceback.print_exc()
+            try:
+                self._send_json(500, {"ok": False, "error": err})
+            except:
+                pass
 
     def log_message(self, format, *args):
         print(f"[{self.client_address[0]}] {args[0]} {args[1]} {args[2]}")
@@ -155,6 +184,7 @@ def main():
     server = HTTPServer(("localhost", 9801), Handler)
     print(f"[目錄伺服器] 啟動於 http://localhost:9801")
     print(f"[目錄檔案] {catalog_path}")
+    print(f"[請求日誌] {LOG_FILE}")
     print(f"[健康檢查] http://localhost:9801/health")
     print()
     try:
