@@ -984,6 +984,9 @@
         if (url) images.push(url)
       }
     }
+
+    const videos = Array.isArray(data.videos) ? data.videos : []
+
     if (images.length > 0) {
       console.log(`[SGC] Found ${images.length} images to upload`)
       const imageContainer = document.querySelector('[data-product-edit-field-unique-id="images"]')
@@ -995,11 +998,24 @@
         if (fileInputs.length === 0) {
           mediaResults.push({ field: '商品圖片', ok: false, error: '找不到圖片上傳 input 欄位' })
         } else {
+          // 收集已上傳的圖片 URL，用於去重
+          const existingUrls = new Set()
+          imageContainer.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src') || img.getAttribute('data-src') || ''
+            if (src) existingUrls.add(src.split('?')[0].replace(/\/$/, ''))
+          })
+
           const downloadedFiles = []
-          let i = 0
-          while (i < images.length && downloadedFiles.length < 9) {
-            const url = images[i]
-            i++
+          for (const url of images) {
+            const cleanUrl = url.split('?')[0].replace(/\/$/, '')
+            if (existingUrls.has(cleanUrl)) {
+              console.log(`[SGC] Skipping already uploaded image: ${url}`)
+              continue
+            }
+            if (downloadedFiles.length >= 9) {
+              console.log('[SGC] Reached 9-image limit, skipping remaining')
+              break
+            }
             try {
               let ext = 'jpg'
               if (url.includes('.png') || url.includes('.PNG')) ext = 'png'
@@ -1020,7 +1036,6 @@
             try {
               const firstInput = fileInputs[0]
               if (firstInput && (firstInput.multiple || firstInput.hasAttribute('multiple'))) {
-                // 如果支援多檔上傳，一次性注入
                 const dt = new DataTransfer()
                 downloadedFiles.forEach(file => dt.items.add(file))
                 firstInput.value = ''
@@ -1030,7 +1045,6 @@
                 firstInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
                 console.log(`[SGC] Injected all ${downloadedFiles.length} files to multiple-enabled input`)
               } else {
-                // 否則，逐一模擬注入與等待
                 for (let i = 0; i < downloadedFiles.length; i++) {
                   const currentInputs = Array.from(imageContainer.querySelectorAll('input[type="file"]'))
                   if (currentInputs.length === 0) {
@@ -1049,12 +1063,64 @@
                   await new Promise(r => setTimeout(r, 500))
                 }
               }
-              mediaResults.push({ field: '商品圖片', ok: true, note: `成功注入 ${downloadedFiles.length} 張圖片` })
+              const skipped = images.length - downloadedFiles.length - (images.length > 9 ? images.length - 9 : 0)
+              const note = `成功注入 ${downloadedFiles.length} 張圖片` + (skipped > 0 ? `，略過 ${skipped} 張重複` : '')
+              mediaResults.push({ field: '商品圖片', ok: true, note })
             } catch (e) {
               mediaResults.push({ field: '商品圖片', ok: false, error: `注入圖片失敗: ${e.message}` })
             }
           } else {
-            mediaResults.push({ field: '商品圖片', ok: false, error: '無圖片成功下載' })
+            mediaResults.push({ field: '商品圖片', ok: false, error: '無圖片成功下載（可能已全部存在）' })
+          }
+        }
+      }
+    }
+
+    // 影片上傳
+    if (videos.length > 0) {
+      console.log(`[SGC] Found ${videos.length} videos to upload`)
+      const videoContainer = document.querySelector('[data-product-edit-field-unique-id="videos"], [data-product-edit-field-unique-id="video"]')
+      
+      if (!videoContainer) {
+        mediaResults.push({ field: '商品影片', ok: false, error: '找不到影片上傳容器' })
+      } else {
+        const fileInputs = Array.from(videoContainer.querySelectorAll('input[type="file"]'))
+        if (fileInputs.length === 0) {
+          mediaResults.push({ field: '商品影片', ok: false, error: '找不到影片上傳 input 欄位' })
+        } else {
+          const downloadedVideos = []
+          for (const url of videos) {
+            if (downloadedVideos.length >= 1) {
+              console.log('[SGC] Only uploading 1 video, skipping remaining')
+              break
+            }
+            try {
+              const filename = `video_${Date.now()}.mp4`
+              const file = await downloadMediaAsFile(url, filename, 'video/mp4', false)
+              downloadedVideos.push(file)
+              console.log(`[SGC] Downloaded video: ${url}`)
+            } catch (e) {
+              console.error(`[SGC] Failed to download video ${url}:`, e)
+            }
+          }
+
+          if (downloadedVideos.length > 0) {
+            try {
+              const targetInput = fileInputs[0]
+              const dt = new DataTransfer()
+              downloadedVideos.forEach(file => dt.items.add(file))
+              targetInput.value = ''
+              targetInput.files = dt.files
+              targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
+              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }))
+              targetInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
+              console.log(`[SGC] Injected ${downloadedVideos.length} video(s)`)
+              mediaResults.push({ field: '商品影片', ok: true, note: `成功注入 ${downloadedVideos.length} 部影片` })
+            } catch (e) {
+              mediaResults.push({ field: '商品影片', ok: false, error: `注入影片失敗: ${e.message}` })
+            }
+          } else {
+            mediaResults.push({ field: '商品影片', ok: false, error: '無影片成功下載' })
           }
         }
       }
