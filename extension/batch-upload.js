@@ -61,11 +61,12 @@ $('btnScan').addEventListener('click', async () => {
   $('btnScan').disabled = true
   $('btnScan').textContent = '掃描中...'
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (!tab || !tab.url || !tab.url.includes('seller.shopee.tw')) {
+    const tabs = await chrome.tabs.query({ currentWindow: true })
+    const sellerTab = tabs.find(t => t.url && t.url.includes('seller.shopee.tw'))
+    if (!sellerTab) {
       throw new Error('請先在賣家頁面開啟此功能')
     }
-    const resp = await chrome.tabs.sendMessage(tab.id, { action: 'extractSellerProductList' })
+    const resp = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
     const products = resp || []
     state.existingNames = new Set(products.map(p => p.name))
     state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
