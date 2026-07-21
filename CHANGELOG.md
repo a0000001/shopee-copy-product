@@ -48,6 +48,16 @@
 - 新增 action `merged`，popup toast 顯示「📝 已更新既有資料」
 - 測試擴大為 50 項（含 merged 驗證：確認 `ps_category` 與 `ps_product_description` 確實補齊）
 
+### 修正：伺服器路徑傳遞與原生主機容錯 (`634af43`)
+
+- `background.js` — `serverStart` 不再傳送空的 `catalog_path`，僅在使用者有設定時才加入 native message，確保原生主機使用預設路徑
+- `catalog-server-host.py` — 改用 `msg.get('catalog_path') or CATALOG_PATH`，即使收到空字串也 fallback 到預設路徑，雙重保護
+
+### 修正：錯誤訊息改為 Modal 對話框 (`c04591c`)
+
+- `popup.html` — 新增 Modal 結構（`.modal-overlay`、`.modal-box`、`.modal-body`）與「複製錯誤訊息」按鈕
+- `popup.js` — 新增 `showErrorModal()`、`hideErrorModal()`、`copyErrorToClipboard()`；`submitToCatalog`、`onServerStart`、`onServerStop` 的錯誤改為 Modal 顯示，可換行、可滾動、按 ✕ 才關閉，不再一閃即過
+
 ## 2026-07-20
 
 ### 修正
