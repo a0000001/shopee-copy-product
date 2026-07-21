@@ -74,8 +74,12 @@ async function onServerStart() {
   btn.disabled = true
   btn.textContent = '啟動中...'
   try {
-    await chrome.runtime.sendMessage({ action: 'serverStart' })
-    await new Promise(r => setTimeout(r, 3000))
+    const resp = await chrome.runtime.sendMessage({ action: 'serverStart' })
+    if (!resp || !resp.ok) {
+      showToast('❌ ' + (resp?.error || '啟動失敗'))
+      return
+    }
+    await new Promise(r => setTimeout(r, 1500))
     await updateServerStatus()
   } catch (e) {
     showToast('❌ 啟動失敗：' + e.message)

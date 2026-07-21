@@ -106,7 +106,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true
     }
     port.postMessage({ type: 'start', catalog_path: msg.catalogPath || '' })
-    sendResponse({ ok: true })
+    const waitForRunning = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        resolve({ ok: false, error: 'Native Host 無回應' })
+      }, 8000)
+      const onMsg = (msg) => {
+        if (msg.type === 'status' || msg.type === 'error') {
+          clearTimeout(timer)
+          port.onMessage.removeListener(onMsg)
+          if (msg.type === 'status' && msg.running) {
+            resolve({ ok: true })
+          } else {
+            resolve({ ok: false, error: msg.message || '伺服器啟動失敗' })
+          }
+        }
+      }
+      port.onMessage.addListener(onMsg)
+    })
+    waitForRunning.then(sendResponse)
     return true
   }
   if (msg.action === 'serverStop') {

@@ -269,9 +269,13 @@ Options page（選項頁面）：
 **安裝方式**：
 
 1. `chrome://extensions` → 啟用開發者模式 → 複製 extension ID（32 個小寫字母）
-2. 執行：
+2. 執行（擇一）：
    ```powershell
    .\scripts\install-native-host.ps1 -ExtensionId 你的ID
+   ```
+   或（若已設定 `.env` 的 `EXTENSION_ID`）：
+   ```powershell
+   .\scripts\install-native-host.ps1
    ```
 3. `chrome://extensions` → 重新整理 extension
 

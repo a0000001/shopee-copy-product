@@ -1,26 +1,27 @@
 <#
 .SYNOPSIS
-  安裝 Chrome Native Messaging Host，讓 extension 能自動啟動/停止目錄伺服器。
+  Install Chrome Native Messaging Host for Shopee Catalog Server extension.
 
 .DESCRIPTION
-  此腳本將 com.shopee.catalog_server 註冊到 HKCU 登錄檔，
-  讓 extension 可透過 chrome.runtime.connectNative 管理 local-catalog-server.py。
+  Registers com.shopee.catalog_server in HKCU registry so the extension
+  can manage local-catalog-server.py via chrome.runtime.connectNative.
 
-  使用方式：
-    1. 在 chrome://extensions 啟用開發者模式
-    2. 載入 extension/ 目錄（已解壓縮）
-    3. 記下 extension ID（如 abcdefghijklmnop123456）
-    4. 以系統管理員身分執行此腳本，或一般身分（HKCU）
+  Usage:
+    1. Enable developer mode in chrome://extensions
+    2. Load extension/ directory (unpacked)
+    3. Note the extension ID (32 lowercase letters)
+    4. Run this script (no admin needed for HKCU)
 
-  參數：
-    -ExtensionId <字串>  你的 extension ID（必填）
+  Parameters:
+    -ExtensionId <string>  Your extension ID (optional if set in .env)
 
-  範例：
+  Examples:
     .\install-native-host.ps1 -ExtensionId abcdefghijklmnop123456
+    .\install-native-host.ps1   (reads EXTENSION_ID from .env)
 #>
 
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]$ExtensionId
 )
 
@@ -30,26 +31,48 @@ $HostName = "com.shopee.catalog_server"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path "$ScriptDir\.."
 $ManifestDir = "$ProjectRoot\extension\native-messaging-host"
-$ManifestTemplate = "$ManifestDir\$HostName.json"
 $ManifestOutput = "$env:TEMP\$HostName.json"
+
+# Read Extension ID from .env if not provided via parameter
+if (-not $ExtensionId) {
+    $envFile = "$ProjectRoot\.env"
+    if (Test-Path $envFile) {
+        $envContent = Get-Content $envFile -Raw -Encoding UTF8
+        if ($envContent -match 'EXTENSION_ID=(\S+)') {
+            $ExtensionId = $Matches[1]
+            Write-Host "Read EXTENSION_ID=$ExtensionId from .env" -ForegroundColor Cyan
+        }
+    }
+    if (-not $ExtensionId) {
+        Write-Error "Please provide -ExtensionId or set EXTENSION_ID in .env"
+        exit 1
+    }
+}
 
 # Validate extension ID format
 if ($ExtensionId -notmatch '^[a-z]{32}$') {
-    Write-Warning "Extension ID 格式看起來不太對，應為 32 個小寫字母"
-    Write-Warning "從 chrome://extensions 複製貼上即可"
+    Write-Warning "Extension ID should be 32 lowercase letters"
+    Write-Warning "Copy it from chrome://extensions"
 }
 
-# Read template and fill placeholders
-$json = Get-Content -Path $ManifestTemplate -Raw -Encoding UTF8
 $batchPath = "$ManifestDir\run_host.bat"
-$json = $json -replace 'REPLACE_WITH_ABSOLUTE_PATH\\.*?run_host\.bat', ($batchPath -replace '\\', '\\')
-$json = $json -replace 'REPLACE_WITH_YOUR_EXTENSION_ID', $ExtensionId
+
+# Build manifest programmatically to ensure correct JSON escaping
+$manifest = @{
+    name             = "com.shopee.catalog_server"
+    description      = "Shopee Catalog Server Manager"
+    path             = $batchPath
+    type             = "stdio"
+    allowed_origins  = @("chrome-extension://$ExtensionId/")
+}
+
+$json = $manifest | ConvertTo-Json
 
 # Validate JSON
 try {
     $null = $json | ConvertFrom-Json
 } catch {
-    Write-Error "填完後 JSON 格式不正確：$_"
+    Write-Error "Generated JSON is invalid: $_"
     exit 1
 }
 
@@ -64,21 +87,21 @@ if (-not (Test-Path $RegPath)) {
 Set-ItemProperty -Path $RegPath -Name '(Default)' -Value $ManifestOutput
 
 Write-Host ""
-Write-Host "✅ Native Messaging Host 安裝成功！" -ForegroundColor Green
-Write-Host "   Host 名稱：$HostName"
-Write-Host "   Extension ID：$ExtensionId"
-Write-Host "   登錄位置：$RegPath"
-Write-Host "   Manifest：$ManifestOutput"
+Write-Host "SUCCESS: Native Messaging Host installed!" -ForegroundColor Green
+Write-Host "  Host name: $HostName"
+Write-Host "  Extension ID: $ExtensionId"
+Write-Host "  Registry: $RegPath"
+Write-Host "  Manifest: $ManifestOutput"
 Write-Host ""
-Write-Host "請重新載入 extension（chrome://extensions → 重新整理圖示）" -ForegroundColor Yellow
+Write-Host "Please reload the extension (chrome://extensions -> refresh icon)" -ForegroundColor Yellow
 Write-Host ""
 
 # Verify
 try {
     $installed = Get-ItemProperty -Path $RegPath -Name '(Default)' -ErrorAction Stop
     if ($installed.'(Default)' -eq $ManifestOutput) {
-        Write-Host "✓ 驗證通過" -ForegroundColor Green
+        Write-Host "Verification passed" -ForegroundColor Green
     }
 } catch {
-    Write-Warning "驗證失敗：$_"
+    Write-Warning "Verification failed: $_"
 }

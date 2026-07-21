@@ -20,6 +20,10 @@ node_modules/
 # Backup files
 *.bak
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Product images (not committed)
 docs/data/蝦皮商品圖稿/
 docs/data/蝦皮商品圖稿（不進git）.md
