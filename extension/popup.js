@@ -154,6 +154,26 @@ async function onServerToggle() {
   }
 }
 
+async function ensureServerRunning() {
+  const indicator = $('serverIndicator')
+  if (indicator?.classList.contains('running')) return true
+  try {
+    const resp = await chrome.runtime.sendMessage({ action: 'serverHealthCheck', serverUrl: _serverUrl })
+    if (resp && resp.running) {
+      await updateServerStatus()
+      return true
+    }
+  } catch { }
+  const startResp = await chrome.runtime.sendMessage({ action: 'serverStart' })
+  if (!startResp || !startResp.ok) {
+    showErrorModal(startResp?.error || '無法啟動伺服器')
+    return false
+  }
+  await new Promise(r => setTimeout(r, 1500))
+  await updateServerStatus()
+  return true
+}
+
 function showToast(msg) {
   const t = $('toast')
   t.textContent = msg
@@ -349,6 +369,8 @@ function initExtractMode(tab) {
       return
     }
     if ($('chkAutoCatalog')?.checked) {
+      const started = await ensureServerRunning()
+      if (!started) return
       const result = await submitToCatalog(data, true)
       if (result?.ok) {
         if (result.action === 'skipped') {
