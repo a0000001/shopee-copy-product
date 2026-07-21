@@ -1352,6 +1352,19 @@
       sendResponse(extractSellerProductList())
       return true
     }
+    if (msg.action === 'checkSaveButton') {
+      const btns = document.querySelectorAll('button')
+      const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
+      sendResponse({ ready: !!btn && !btn.disabled })
+      return true
+    }
+    if (msg.action === 'clickSaveButton') {
+      const btns = document.querySelectorAll('button')
+      const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
+      if (btn) { btn.click(); sendResponse({ ok: true }) }
+      else sendResponse({ ok: false, error: '找不到儲存按鈕' })
+      return true
+    }
   })
 
   // ── postMessage handler for CDP-triggered operations ──

@@ -234,6 +234,32 @@ check("伺服器路徑含 shop_name", "shop_name" in server_py)
 check("伺服器 RAW_DATA_PATH 預設為 E:/proj/shopee", "E:/proj/shopee" in server_py)
 check("伺服器 RAW_DATA_PATH 不含 mazz68", "E:/proj/shopee/mazz68" not in server_py)
 
+# ── Step 6: 驗證批次上傳功能 ──
+print("\n=== 6. 驗證批次上傳功能 ===\n")
+
+content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
+check("content.js 含 checkSaveButton", "checkSaveButton" in content_js)
+check("content.js 含 clickSaveButton", "clickSaveButton" in content_js)
+check("content.js 用 Array.from 取代 contains", "Array.from(btns).find" in content_js)
+
+popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
+check("popup.html 含 btnBatchUpload", "btnBatchUpload" in popup_html)
+
+popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
+check("popup.js 開 batch-upload.html", "batch-upload.html" in popup_js)
+
+batch_html = (BASE / "extension" / "batch-upload.html")
+check("batch-upload.html 存在", batch_html.exists())
+
+batch_js = (BASE / "extension" / "batch-upload.js")
+check("batch-upload.js 存在", batch_js.exists())
+batch_js_text = batch_js.read_text(encoding="utf-8")
+check("batch-upload.js 含 waitForTabReady", "waitForTabReady" in batch_js_text)
+check("batch-upload.js 含 fillAndSave", "fillAndSave" in batch_js_text)
+check("batch-upload.js 檢查個別欄位", "failedFields" in batch_js_text)
+check("batch-upload.js 含 checkSaveButton", "checkSaveButton" in batch_js_text)
+check("batch-upload.js 含 clickSaveButton", "clickSaveButton" in batch_js_text)
+
 # ── Results ──
 print(f"\n{'='*40}")
 print(f"通過：{passed}  失敗：{failed}")

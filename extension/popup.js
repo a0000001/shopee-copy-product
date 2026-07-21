@@ -294,6 +294,10 @@ function initSellerMode(tab) {
       $('btnFill').textContent = '📋 從剪貼簿填入'
     }
   })
+
+  $('btnBatchUpload').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'batch-upload.html' })
+  })
 }
 
 const CATEGORY_MAP = {

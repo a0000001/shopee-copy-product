@@ -4,6 +4,15 @@
 
 ## 2026-07-21
 
+### 批次上傳 Extension 分頁：實作完成
+
+- `extension/content.js` — 新增 `checkSaveButton` 與 `clickSaveButton` 兩個 message handler，支援批次上傳流程中檢查與點擊儲存按鈕；使用 `Array.from(btns).find(b => /儲存|保存|確認/.test(...))` 取代非法 CSS `:contains()`
+- `extension/popup.html` — 賣家模式新增「批次上傳」按鈕
+- `extension/popup.js` — 批次上傳按鈕點擊後開啟 `batch-upload.html` 分頁
+- `extension/batch-upload.html` — 批次上傳獨立分頁 UI，四步驟流程（選檔→掃描→上傳→完成），含進度條、即時日誌、暫停/重試
+- `extension/batch-upload.js` — 批次上傳核心邏輯：`waitForTabReady()` 用 `chrome.tabs.onUpdated` 監聽分頁載入；`fillAndSave()` 檢查 `fillAll` 回傳的個別欄位失敗；`extractSellerProductList()` 去重；逐筆間隔 3 秒避免 WAF
+- `scripts/test-catalog-server.py` — 新增 Step 6 共 12 項測試，驗證批次上傳相關 handler、按鈕、新檔案
+
 ### 清理目錄：移除無封面商品、從原始資料救回 89 筆
 
 - `docs/data/product-catalog-tw.json` — 移除 `ps_item_cover_image` 為空的 88 筆商品（206→118），保留全部有封面的商品
