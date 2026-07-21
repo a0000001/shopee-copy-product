@@ -1,6 +1,6 @@
 ---
 type: fix
-status: draft
+status: stable
 updated: 2026-07-21
 domain: shopee
 tags: [local-catalog-server, CORS, preflight, service-worker, carousel, virtual-rendering, content-script, native-host, subprocess]
