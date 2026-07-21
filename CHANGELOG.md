@@ -74,6 +74,11 @@
 - `popup.js` — `submitToCatalog` 新增 `silent` 參數（靜默模式），自動目錄時不顯示獨立 toast，由 `btnCopy` 統一顯示單一合併提示
 - `content.js` — `uploadMediaAsync` 新增 `images` 陣列重建邏輯，若 `data.images` 為空則從 `ps_item_cover_image` / `ps_item_image_1..8` 補回，相容舊版 JSON 格式
 
+### 修正：圖片去重避免超過9張上限，新增影片上傳 (`b2fd9cf`)
+
+- `content.js` — `uploadMediaAsync` 圖片上傳加入去重：先掃描頁面上已存在的圖片 URL，跳過重複，只下載不足 9 張的新圖片
+- `content.js` — 新增影片上傳：從 `data.videos` 讀取影片 URL，下載後注入 `[data-product-edit-field-unique-id="videos"]` 或 `video` 容器的 file input，最多上傳 1 部
+
 ### 修正：伺服器面板改為圖示＋單一按鈕 (`9241a1f`)
 
 - `popup.html` — 伺服器狀態改為純圖示（`⚠` 未啟動／`●` 運行中／`◌` 旋轉檢查中），所有文字移至 `title` 屬性（hover 顯示）；啟動/停止合併為單一按鈕
