@@ -136,6 +136,15 @@ batch-upload 分頁：
 
 `S:\projects\shopee-copy-product\extension\batch-upload.js`
 
+**核心原則：直接複製 popup.js「從剪貼簿填入」的已驗證流程，不重造輪子。**
+
+popup.js 的流程非常簡單：
+1. `chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data })`
+2. 等待 response（`return true` 保持 channel open）
+3. 根據 `resp.ok` 和 `resp.results` 顯示結果
+
+batch-upload.js 照做就好，唯一需要額外處理的是：新開的分頁可能因 SPA 重新導向導致 content script 被重注入，需加入「重試機制」。
+
 ```javascript
 // ── 狀態 ──
 const state = {
@@ -210,6 +219,79 @@ function log(msg, type = 'info') {
 // ── 工具函數 ──
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
+}
+
+// 新開分頁可能因 SPA 重新導向導致 content script 重注入，
+// sendMessage 可能因 channel 中斷而失敗，需重試
+async function sendMessageWithRetry(tabId, msg, maxRetries = 3, delay = 2000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, msg)
+    } catch (e) {
+      if (i < maxRetries - 1) {
+        await sleep(delay)
+        continue
+      }
+      throw e
+    }
+  }
+}
+
+// 等待分頁完全載入
+function waitForTabReady(tabId, timeout = 20000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('分頁載入超時')), timeout)
+    function onUpdated(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(onUpdated)
+        clearTimeout(timer)
+        setTimeout(() => resolve(), 500)
+      }
+    }
+    chrome.tabs.onUpdated.addListener(onUpdated)
+  })
+}
+
+async function fillAndSave(item, tabId) {
+  // 直接複製 popup.js「從剪貼簿填入」的流程：
+  // chrome.tabs.sendMessage({ action: 'fillProductData', data }) → 等待 response
+  const data = {
+    title: item.ps_product_name,
+    price: item.ps_price,
+    description: item.ps_product_description,
+    images: item.images || [],
+    videos: item.videos || [],
+    ps_category: item.ps_category,
+    ps_stock: item.ps_stock || 999,
+    ps_sku_short: item.ps_sku_short || '',
+    ps_brand: item.ps_brand || 'NoBrand',
+    ps_length: item.ps_length || 10,
+    ps_width: item.ps_width || 10,
+    ps_height: item.ps_height || 4,
+    installment: item.installment || 24,
+    ps_item_cover_image: item.ps_item_cover_image || '',
+    url: item.url || '',
+  }
+
+  // 使用 sendMessageWithRetry 處理 SPA 重新導向導致的 channel 中斷
+  const result = await sendMessageWithRetry(tabId, { action: 'fillProductData', data })
+
+  if (!result || !result.ok) {
+    throw new Error((result && result.error) || 'fillAll 失敗')
+  }
+
+  // 等待儲存按鈕啟用（循60秒，每秒1次）
+  for (let i = 0; i < 60; i++) {
+    await sleep(1000)
+    try {
+      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
+      if (checkResult && checkResult.ready) {
+        await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
+        return true
+      }
+    } catch {}
+  }
+  throw new Error('等待儲存按鈕超時')
 }
 
 // 等待分頁完全載入，且 content script 可通訊

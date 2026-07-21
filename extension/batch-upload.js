@@ -89,6 +89,20 @@ $('btnScan').addEventListener('click', async () => {
 })
 
 // ── 步驟 3：開始上傳 ──
+async function sendMessageWithRetry(tabId, msg, maxRetries = 3, delay = 2000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, msg)
+    } catch (e) {
+      if (i < maxRetries - 1) {
+        await sleep(delay)
+        continue
+      }
+      throw e
+    }
+  }
+}
+
 async function fillAndSave(item, tabId) {
   const data = {
     title: item.ps_product_name,
