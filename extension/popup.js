@@ -125,21 +125,24 @@ function showData(data) {
   $('description').textContent = data.description || '(無描述)'
 
   const imgs = data.images || []
-  $('imgCount').textContent = `(${imgs.length} 張)`
-  const imgContainer = $('images')
-  imgContainer.innerHTML = ''
+  const videos = data.videos || []
+  const total = videos.length + imgs.length
+  $('mediaCount').textContent = `(${total} 個項目)`
+  const container = $('mediaGrid')
+  container.innerHTML = ''
+  videos.forEach(url => {
+    const el = document.createElement('div')
+    el.className = 'thumb-video'
+    el.title = url.split('/').pop() || url
+    el.textContent = '▶'
+    container.appendChild(el)
+  })
   imgs.forEach(url => {
     const img = document.createElement('img')
     img.src = url
     img.title = url
-    imgContainer.appendChild(img)
+    container.appendChild(img)
   })
-
-  const videos = data.videos || []
-  $('videoCount').textContent = `(${videos.length} 個)`
-  $('videos').textContent = videos.length
-    ? videos.map(v => v.split('/').pop() || v).join('\n')
-    : '(無影片)'
 
   window._sgcData = data
 }
