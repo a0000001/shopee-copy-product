@@ -1345,8 +1345,8 @@
       return true
     }
     if (msg.action === 'fillProductData') {
-      fillAll(msg.data || {}).then(sendResponse)
-      return true
+      fillAll(msg.data || {}).catch(e => console.error('[SGC] fillAll error:', e))
+      sendResponse({ ok: true })
     }
     if (msg.action === 'extractSellerProductList') {
       sendResponse(extractSellerProductList())

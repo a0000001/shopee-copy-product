@@ -256,7 +256,6 @@ check("batch-upload.js 存在", batch_js.exists())
 batch_js_text = batch_js.read_text(encoding="utf-8")
 check("batch-upload.js 含 waitForTabReady", "waitForTabReady" in batch_js_text)
 check("batch-upload.js 含 fillAndSave", "fillAndSave" in batch_js_text)
-check("batch-upload.js 檢查個別欄位", "failedFields" in batch_js_text)
 check("batch-upload.js 含 checkSaveButton", "checkSaveButton" in batch_js_text)
 check("batch-upload.js 含 clickSaveButton", "clickSaveButton" in batch_js_text)
 

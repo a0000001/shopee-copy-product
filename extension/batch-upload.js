@@ -110,18 +110,14 @@ async function fillAndSave(item, tabId) {
 
   const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data })
 
+  // fillAll 已改為 fire-and-forget：立即回傳 { ok: true }
+  // 實際填入結果透過 checkSaveButton 輪詢確認
   if (!result || !result.ok) {
-    throw new Error((result && result.error) || 'fillAll 失敗')
+    throw new Error((result && result.error) || 'fillAll 啟動失敗')
   }
 
-  const failedFields = (result.results || []).filter(r => !r.ok)
-  if (failedFields.length > 0) {
-    const errors = failedFields.map(r => r.field + ': ' + (r.error || '未知')).join('; ')
-    throw new Error('欄位填入失敗: ' + errors)
-  }
-
-  for (let i = 0; i < 30; i++) {
-    await sleep(500)
+  for (let i = 0; i < 60; i++) {
+    await sleep(1000)
     try {
       const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
       if (checkResult && checkResult.ready) {
