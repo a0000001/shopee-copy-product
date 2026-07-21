@@ -81,63 +81,70 @@ async function submitToCatalog(data) {
 
 async function updateServerStatus() {
   const indicator = $('serverIndicator')
-  const startBtn = $('btnServerStart')
-  const stopBtn = $('btnServerStop')
+  const btn = $('btnServerToggle')
   if (!indicator) return
 
-  indicator.textContent = '檢查中...'
-  indicator.className = 'server-status unknown'
+  indicator.className = 'server-status spin'
+  indicator.title = '檢查中…'
 
   try {
     const resp = await chrome.runtime.sendMessage({ action: 'serverHealthCheck', serverUrl: _serverUrl })
     const running = resp && resp.running
     if (running) {
-      indicator.textContent = '● 伺服器運行中'
+      indicator.textContent = '●'
       indicator.className = 'server-status running'
-      if (startBtn) startBtn.style.display = 'none'
-      if (stopBtn) stopBtn.style.display = 'inline-block'
+      indicator.title = '伺服器運行中'
+      btn.textContent = '⏹'
+      btn.className = 'btn-server running'
+      btn.title = '停止伺服器'
+      btn.disabled = false
     } else {
-      indicator.textContent = '○ 伺服器未啟動'
+      indicator.textContent = '⚠'
       indicator.className = 'server-status stopped'
-      if (startBtn) startBtn.style.display = 'inline-block'
-      if (stopBtn) stopBtn.style.display = 'none'
+      indicator.title = '伺服器未啟動'
+      btn.textContent = '▶'
+      btn.className = 'btn-server'
+      btn.title = '啟動伺服器'
+      btn.disabled = false
     }
   } catch {
-    indicator.textContent = '○ 伺服器未啟動'
+    indicator.textContent = '⚠'
     indicator.className = 'server-status stopped'
-  }
-}
-
-async function onServerStart() {
-  const btn = $('btnServerStart')
-  btn.disabled = true
-  btn.textContent = '...'
-  try {
-    const resp = await chrome.runtime.sendMessage({ action: 'serverStart' })
-    if (!resp || !resp.ok) {
-      showErrorModal(resp?.error || '啟動失敗')
-      return
-    }
-    await new Promise(r => setTimeout(r, 1500))
-    await updateServerStatus()
-  } catch (e) {
-    showErrorModal('啟動失敗：' + e.message)
-  } finally {
-    btn.disabled = false
+    indicator.title = '伺服器未啟動'
     btn.textContent = '▶'
+    btn.className = 'btn-server'
+    btn.title = '啟動伺服器'
+    btn.disabled = false
   }
 }
 
-async function onServerStop() {
-  $('btnServerStop').disabled = true
+async function onServerToggle() {
+  const btn = $('btnServerToggle')
+  const indicator = $('serverIndicator')
+  const isRunning = btn.classList.contains('running')
+
+  btn.disabled = true
+  indicator.textContent = '◌'
+  indicator.className = 'server-status spin'
+  indicator.title = '處理中…'
+
   try {
-    await chrome.runtime.sendMessage({ action: 'serverStop' })
-    await new Promise(r => setTimeout(r, 1000))
+    if (isRunning) {
+      await chrome.runtime.sendMessage({ action: 'serverStop' })
+      await new Promise(r => setTimeout(r, 1000))
+    } else {
+      const resp = await chrome.runtime.sendMessage({ action: 'serverStart' })
+      if (!resp || !resp.ok) {
+        showErrorModal(resp?.error || '啟動失敗')
+        btn.disabled = false
+        return
+      }
+      await new Promise(r => setTimeout(r, 1500))
+    }
     await updateServerStatus()
   } catch (e) {
     showErrorModal(e.message)
-  } finally {
-    $('btnServerStop').disabled = false
+    btn.disabled = false
   }
 }
 
@@ -371,8 +378,7 @@ async function main() {
   updateServerStatus()
   initAutoCatalogCheckbox()
 
-  $('btnServerStart').addEventListener('click', onServerStart)
-  $('btnServerStop').addEventListener('click', onServerStop)
+  $('btnServerToggle').addEventListener('click', onServerToggle)
   $('btnCloseError').addEventListener('click', hideErrorModal)
   $('btnCopyError').addEventListener('click', copyErrorToClipboard)
 
