@@ -1,4 +1,7 @@
-# 023 — 批次上傳 Extension 分頁（batch_upload）
+# 023-01 — 批次上傳 Extension 分頁（規格）
+
+> 本文件為規格文件，定義功能需求、使用流程與設計決策。
+> 實作細節請見 [023-02 實作文件](023-02-plan-批次上傳Extension分頁實作（batch_upload_impl）.md)
 
 ## 目標
 
