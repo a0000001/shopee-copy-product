@@ -126,8 +126,7 @@ function showData(data) {
 
   const imgs = data.images || []
   const videos = data.videos || []
-  const total = videos.length + imgs.length
-  $('mediaCount').textContent = `(${total} 個項目)`
+  $('mediaCount').textContent = `影片(${videos.length}) 圖片(${imgs.length})`
   const container = $('mediaGrid')
   container.innerHTML = ''
   videos.forEach(url => {
