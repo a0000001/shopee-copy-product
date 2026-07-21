@@ -121,6 +121,7 @@ $('btnStart').addEventListener('click', async () => {
   state.isRunning = true
   state.shouldStop = false
   state.results = []
+  let consecutiveFailures = 0
   $('btnStart').style.display = 'none'
   $('btnStop').style.display = 'inline-block'
   $('btnStop').disabled = false
@@ -143,14 +144,21 @@ $('btnStart').addEventListener('click', async () => {
         url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
       })
       await waitForTabReady(tab.id)
+      console.log('[SGC] batch-upload tabId:', tab.id, 'url:', tab.url)
 
       await fillAndSave(item, tab.id)
 
       state.results.push({ name: item.ps_product_name, ok: true })
       log('✅ ' + item.ps_product_name, 'ok')
+      consecutiveFailures = 0
     } catch (e) {
       state.results.push({ name: item.ps_product_name, ok: false, error: e.message })
       log('❌ ' + item.ps_product_name + ': ' + e.message, 'fail')
+      consecutiveFailures++
+      if (consecutiveFailures >= 2) {
+        log('⛔ 連續 ' + consecutiveFailures + ' 筆錯誤，自動暫停', 'fail')
+        state.shouldStop = true
+      }
     } finally {
       if (tab && tab.id) {
         try { chrome.tabs.remove(tab.id) } catch {}
