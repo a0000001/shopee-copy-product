@@ -221,22 +221,6 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-// 新開分頁可能因 SPA 重新導向導致 content script 重注入，
-// sendMessage 可能因 channel 中斷而失敗，需重試
-async function sendMessageWithRetry(tabId, msg, maxRetries = 3, delay = 2000) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await chrome.tabs.sendMessage(tabId, msg)
-    } catch (e) {
-      if (i < maxRetries - 1) {
-        await sleep(delay)
-        continue
-      }
-      throw e
-    }
-  }
-}
-
 // 等待分頁完全載入
 function waitForTabReady(tabId, timeout = 20000) {
   return new Promise((resolve, reject) => {
@@ -255,32 +239,15 @@ function waitForTabReady(tabId, timeout = 20000) {
 async function fillAndSave(item, tabId) {
   // 直接複製 popup.js「從剪貼簿填入」的流程：
   // chrome.tabs.sendMessage({ action: 'fillProductData', data }) → 等待 response
-  const data = {
-    title: item.ps_product_name,
-    price: item.ps_price,
-    description: item.ps_product_description,
-    images: item.images || [],
-    videos: item.videos || [],
-    ps_category: item.ps_category,
-    ps_stock: item.ps_stock || 999,
-    ps_sku_short: item.ps_sku_short || '',
-    ps_brand: item.ps_brand || 'NoBrand',
-    ps_length: item.ps_length || 10,
-    ps_width: item.ps_width || 10,
-    ps_height: item.ps_height || 4,
-    installment: item.installment || 24,
-    ps_item_cover_image: item.ps_item_cover_image || '',
-    url: item.url || '',
-  }
+  const data = { ... } // 同 popup.js 的資料轉換
 
-  // 使用 sendMessageWithRetry 處理 SPA 重新導向導致的 channel 中斷
-  const result = await sendMessageWithRetry(tabId, { action: 'fillProductData', data })
+  const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data })
 
   if (!result || !result.ok) {
     throw new Error((result && result.error) || 'fillAll 失敗')
   }
 
-  // 等待儲存按鈕啟用（循60秒，每秒1次）
+  // 等待儲存按鈕啟用（輪詢60秒，每秒1次）
   for (let i = 0; i < 60; i++) {
     await sleep(1000)
     try {
@@ -481,9 +448,16 @@ if (msg.action === 'clickSaveButton') {
 
 ## 尚未確定的問題
 
-1. **儲存按鈕的 selector** — 已修正為 `Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))`，但仍需到蝦皮 seller 後台實際頁面確認按鈕文字是否匹配（尤其是「儲存」按鈕在 Vue 元件中可能是 disabled 狀態，需確認 disabled 判斷邏輯正確）
+1. **儲存按鈕的 selector** — 已修正為 `Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))`，但仍需到蝦皮 seller 後台實際頁面確認按鈕文字是否匹配
 
-2. **WAF 頻率限制** — 蝦皮可能對短時間大量新增商品有頻率限制。3 秒間隔是否足夠？是否需要動態調整（連續失敗時增加間隔）？需實際測試後才能確定。
+2. **WAF 頻率限制** — 蝦皮可能對短時間大量新增商品有頻率限制。3 秒間隔是否足夠？需實際測試後才能確定。
+
+3. **新開分頁的 `fillProductData` 失敗** — 批次上傳流程中，新開分頁後 `chrome.tabs.sendMessage` 會失敗，已出現兩種錯誤：
+   - `A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received`（約 11~14 秒）
+   - `Illegal invocation`（約 6~10 秒）
+   
+   懷疑是 seller 新商品頁在載入過程中有 SPA 重新導向，導致 content script 被重注入、message channel 中斷。但 popup.js 的「從剪貼簿填入」在已開啟的分頁上完全正常。  
+   **目前未解決，需進一步診斷。**
 
 ## Tasks
 
