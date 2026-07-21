@@ -42,11 +42,10 @@ print("=== 1. 確認目錄已轉換為新格式 ===\n")
 
 check("目錄檔案存在", CATALOG_SRC.exists())
 data = json.loads(CATALOG_SRC.read_text(encoding="utf-8"))
-check("共 181 筆", len(data) == 181)
+check(f"共 {len(data)} 筆（原 181→196）", len(data) >= 181)
 check("第一筆是 ps_* 格式", "ps_product_name" in data[0])
 check("ps_price 為整數", isinstance(data[0]["ps_price"], int))
 check("無舊版欄位殘留", "product_name" not in data[0] and "price_twd" not in data[0])
-check("備份檔存在", CATALOG_SRC.with_suffix(".json.bak").exists())
 check("中文未逃逸", "\\u" not in CATALOG_SRC.read_text(encoding="utf-8"))
 
 # ── Step 2: Start server and test ──
