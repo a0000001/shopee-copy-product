@@ -1,4 +1,4 @@
-import struct, json, sys, subprocess, os, signal, urllib.request, urllib.error
+import struct, json, sys, subprocess, os, signal, urllib.request, urllib.error, platform
 
 SERVER_PORT = 9801
 SERVER_HEALTH = f'http://localhost:{SERVER_PORT}/health'
@@ -47,12 +47,16 @@ def handle_message(msg):
 
         catalog_path = msg.get('catalog_path', CATALOG_PATH)
         cmd = [sys.executable, SERVER_SCRIPT, '--catalog-path', catalog_path]
-        server_process = subprocess.Popen(
-            cmd,
+        kwargs = dict(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=PROJECT_ROOT,
         )
+        if platform.system() == 'Windows':
+            kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kwargs['start_new_session'] = True
+        server_process = subprocess.Popen(cmd, **kwargs)
 
         for _ in range(15):
             import time

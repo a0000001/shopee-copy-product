@@ -25,6 +25,18 @@
 - `install-native-host.ps1` — 重寫為純 ASCII 解決 PowerShell 編碼錯誤；改為 `ConvertTo-Json` 物件建構，避免字串取代產生無效 JSON（單反斜線）；新增 `-ExtensionId` 改為選填，可從 `.env` 讀取 `EXTENSION_ID`
 - `.gitignore` — 加入 `__pycache__/`、`*.pyc` 避免 Python 快取檔被追蹤
 
+### 修復：POST /append 連線失敗（根因：Native Host 行程樹被殺）
+
+第一次推測 CORS/PNA header 不足（commit `905aea2`）→ 無效
+第二次推測 popup 跨來源問題，改為 background 發送（commit `7f00186`）→ 仍無效
+第三次加入診斷 log（commit `ec34f08`）→ 確認 `ERR_EMPTY_RESPONSE`，伺服器端斷線
+第四次 `do_POST` 加入 try/except 防 crash（commit `d6eb5c3`）→ 仍無效
+
+**最終根因**：Native Host 透過 `subprocess.Popen` 啟動伺服器，但 Chrome 殺掉 Service Worker 時會 kill 整個 Native Host 行程樹，**連同子行程的伺服器一起殺掉**。健康檢查走獨立 HTTP fetch 不受影響，所以 popup 顯示「運行中」但伺服器已死。
+
+- `catalog-server-host.py` — 加入 `CREATE_NEW_PROCESS_GROUP`（Windows）／`start_new_session`（Unix）讓伺服器獨立於行程樹
+- `docs/spec/020-fix-本地目錄伺服器連線與輪播圖觸發（catalog_connection_carousel）.md` — 建立根因分析與修復文件
+
 ## 2026-07-20
 
 ### 修正

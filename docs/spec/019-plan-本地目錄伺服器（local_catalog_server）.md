@@ -291,7 +291,7 @@ Options page（選項頁面）：
 | 項目 | 說明 |
 |------|------|
 | 需手動安裝 Native Host | 一次性安裝，extension ID 變更時需重裝 |
-| Chrome 背景終止 Service Worker | 若 Chrome 殺掉 background.js，native port 斷線，伺服器不受影響（subprocess 獨立） |
+| Chrome 背景終止 Service Worker | 若 Chrome 殺掉 background.js，native port 斷線，伺服器不受影響（`CREATE_NEW_PROCESS_GROUP` 獨立行程樹） |
 
 ---
 
