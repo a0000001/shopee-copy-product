@@ -4,6 +4,11 @@
 
 ## 2026-07-21
 
+### 清理目錄：移除無封面商品、從原始資料救回 89 筆
+
+- `docs/data/product-catalog-tw.json` — 移除 `ps_item_cover_image` 為空的 88 筆商品（206→118），保留全部有封面的商品
+- 從 `E:\proj\shopee\mazz68\{商品標題}\{商品標題}.json` 原始資料中補回 89 筆完整資料（含封面圖、描述、圖片陣列、網址），目前目錄共 207 筆
+
 ### 新增功能：022 批量自動上傳、多帳號機制、擴充 Extension 功能
 
 - `extension/content.js` — 新增 `extractSellerProductList()` 從我的商品列表頁 DOM 爬取已上架 SKU；新增 `window.postMessage` handler 讓 CDP 可直接觸發 `fillProductData`、`extractSellerProductList`、`getProductData`；`extractProductData()` 成功後自動觸發 `saveRawProductData` 經目錄伺服器端點儲存原始資料；新增 `shop_name` 從 `__INITIAL_STATE__` 提取，用於決定儲存路徑
