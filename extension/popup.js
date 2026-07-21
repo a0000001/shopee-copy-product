@@ -52,7 +52,7 @@ function initAutoCatalogCheckbox() {
   })
 }
 
-async function submitToCatalog(data) {
+async function submitToCatalog(data, silent) {
   try {
     const json = toJsonClipboard(data)
     const product = JSON.parse(json)[0]
@@ -63,6 +63,11 @@ async function submitToCatalog(data) {
       product,
     })
     console.log('[SGC] submitToCatalog result:', result)
+    if (silent) {
+      if (result?.ok) return result
+      showErrorModal(result?.error || '伺服器錯誤')
+      return result
+    }
     if (result?.ok && result.action === 'appended') {
       showToast('✅ 已寫入目錄')
     } else if (result?.ok && result.action === 'appended_with_warning') {
@@ -75,6 +80,7 @@ async function submitToCatalog(data) {
       showErrorModal(result?.error || '伺服器錯誤')
     }
   } catch (e) {
+    if (silent) return { ok: false, error: e.message }
     showErrorModal('無法連線 (' + _serverUrl + '): ' + e.message)
   }
 }
@@ -311,6 +317,7 @@ function toJsonClipboard(data) {
     ps_sku_short: data.ProductId || '',
     ps_brand: 'NoBrand',
     ...psImages,
+    images,
     url: data.url || '',
     videos: data.videos || [],
     installment: 24,
@@ -337,13 +344,23 @@ function initExtractMode(tab) {
     if (!data) { showToast('無資料'); return }
     try {
       await navigator.clipboard.writeText(toJsonClipboard(data))
-      showToast('已複製 JSON 到剪貼簿！')
     } catch (e) {
       showToast('複製失敗：' + e.message)
       return
     }
     if ($('chkAutoCatalog')?.checked) {
-      await submitToCatalog(data)
+      const result = await submitToCatalog(data, true)
+      if (result?.ok) {
+        if (result.action === 'skipped') {
+          showToast('✅ 已複製 JSON，目錄已存在，略過')
+        } else if (result.action === 'merged') {
+          showToast('📝 已複製 JSON，已更新目錄')
+        } else {
+          showToast('✅ 已複製 JSON，已寫入目錄')
+        }
+      }
+    } else {
+      showToast('已複製 JSON 到剪貼簿！')
     }
   })
 

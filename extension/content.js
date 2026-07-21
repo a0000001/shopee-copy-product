@@ -975,8 +975,15 @@
   async function uploadMediaAsync(data) {
     const mediaResults = []
     
-    // 1. 商品圖片 (最多 9 張)
-    const images = Array.isArray(data.images) ? data.images : []
+    // 重建 images 陣列：從 images 取，或從 ps_item_* 欄位重建（相容舊版 JSON）
+    let images = Array.isArray(data.images) ? data.images : []
+    if (images.length === 0) {
+      for (let i = 0; i < 9; i++) {
+        const key = i === 0 ? 'ps_item_cover_image' : `ps_item_image_${i}`
+        const url = data[key]
+        if (url) images.push(url)
+      }
+    }
     if (images.length > 0) {
       console.log(`[SGC] Found ${images.length} images to upload`)
       const imageContainer = document.querySelector('[data-product-edit-field-unique-id="images"]')
