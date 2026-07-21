@@ -9,7 +9,8 @@
     "clipboardRead",
     "contextMenus",
     "downloads",
-    "storage"
+    "storage",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://shopee.tw/*",

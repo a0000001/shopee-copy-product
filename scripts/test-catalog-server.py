@@ -63,6 +63,18 @@ try:
     r = api("/health")
     check("健康檢查", r.get("ok") is True)
 
+    r = api("/shutdown")
+    check("shutdown 端點", r.get("ok") is True, str(r))
+
+    # Restart server for remaining tests
+    time.sleep(1)
+    old_server = server
+    server = subprocess.Popen(
+        [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST)],
+        cwd=BASE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    time.sleep(2)
+
     r = api("/append", "POST", {"product": {"ps_product_name": "測試商品", "ps_price": 500, "url": "http://test/append-test", "ps_category": "100644", "ps_stock": 999}})
     check("成功寫入", r.get("action") == "appended", str(r))
     check("目錄大小 +1", r.get("catalog_size") == base_count + 1, str(r))
@@ -125,6 +137,25 @@ options_html = BASE / "extension" / "options.html"
 options_js = BASE / "extension" / "options.js"
 check("options.html 存在", options_html.exists())
 check("options.js 存在", options_js.exists())
+
+nmhost = BASE / "extension" / "native-messaging-host"
+check("native-messaging-host 目錄存在", nmhost.is_dir())
+check("catalog-server-host.py 存在", (nmhost / "catalog-server-host.py").exists())
+check("run_host.bat 存在", (nmhost / "run_host.bat").exists())
+check("native manifest 模板存在", (nmhost / "com.shopee.catalog_server.json").exists())
+
+bg_js = (BASE / "extension" / "background.js").read_text(encoding="utf-8")
+check("background.js 含 nativeMessaging", "connectNative" in bg_js)
+check("background.js 含 serverStart", "serverStart" in bg_js)
+check("background.js 含 serverStop", "serverStop" in bg_js)
+check("background.js 含 serverHealthCheck", "serverHealthCheck" in bg_js)
+
+manifest = json.loads((BASE / "extension" / "manifest.json").read_text(encoding="utf-8"))
+check("manifest 含 nativeMessaging", "nativeMessaging" in manifest.get("permissions", []))
+
+install_script = BASE / "scripts" / "install-native-host.ps1"
+check("install-native-host.ps1 存在", install_script.exists())
+check("install 腳本含 ExtensionId 參數", "ExtensionId" in install_script.read_text(encoding="utf-8"))
 
 # ── Results ──
 print(f"\n{'='*40}")

@@ -1,0 +1,7 @@
+{
+  "name": "com.shopee.catalog_server",
+  "description": "Shopee Catalog Server Manager — starts/stops the local catalog server from the extension",
+  "path": "REPLACE_WITH_ABSOLUTE_PATH\\run_host.bat",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://REPLACE_WITH_YOUR_EXTENSION_ID/"]
+}

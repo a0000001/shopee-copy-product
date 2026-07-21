@@ -40,6 +40,64 @@ async function submitToCatalog(data) {
   }
 }
 
+async function updateServerStatus() {
+  const indicator = $('serverIndicator')
+  const startBtn = $('btnServerStart')
+  const stopBtn = $('btnServerStop')
+  if (!indicator) return
+
+  indicator.textContent = '檢查中...'
+  indicator.className = 'server-status unknown'
+
+  try {
+    const resp = await chrome.runtime.sendMessage({ action: 'serverHealthCheck', serverUrl: _serverUrl })
+    const running = resp && resp.running
+    if (running) {
+      indicator.textContent = '● 伺服器運行中'
+      indicator.className = 'server-status running'
+      if (startBtn) startBtn.style.display = 'none'
+      if (stopBtn) stopBtn.style.display = 'inline-block'
+    } else {
+      indicator.textContent = '○ 伺服器未啟動'
+      indicator.className = 'server-status stopped'
+      if (startBtn) startBtn.style.display = 'inline-block'
+      if (stopBtn) stopBtn.style.display = 'none'
+    }
+  } catch {
+    indicator.textContent = '○ 伺服器未啟動'
+    indicator.className = 'server-status stopped'
+  }
+}
+
+async function onServerStart() {
+  const btn = $('btnServerStart')
+  btn.disabled = true
+  btn.textContent = '啟動中...'
+  try {
+    await chrome.runtime.sendMessage({ action: 'serverStart' })
+    await new Promise(r => setTimeout(r, 3000))
+    await updateServerStatus()
+  } catch (e) {
+    showToast('❌ 啟動失敗：' + e.message)
+  } finally {
+    btn.disabled = false
+    btn.textContent = '▶ 啟動伺服器'
+  }
+}
+
+async function onServerStop() {
+  $('btnServerStop').disabled = true
+  try {
+    await chrome.runtime.sendMessage({ action: 'serverStop' })
+    await new Promise(r => setTimeout(r, 1000))
+    await updateServerStatus()
+  } catch (e) {
+    showToast('❌ 停止失敗：' + e.message)
+  } finally {
+    $('btnServerStop').disabled = false
+  }
+}
+
 function showToast(msg) {
   const t = $('toast')
   t.textContent = msg
@@ -253,6 +311,10 @@ function initExtractMode(tab) {
 
 async function main() {
   await loadServerUrl()
+  updateServerStatus()
+
+  $('btnServerStart').addEventListener('click', onServerStart)
+  $('btnServerStop').addEventListener('click', onServerStop)
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab) { showError('無法取得目前分頁'); return }

@@ -84,6 +84,10 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/health":
             self._send_json(200, {"ok": True})
+        elif parsed.path == "/shutdown":
+            self._send_json(200, {"ok": True, "message": "shutting down"})
+            import threading
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
         else:
             self._send_json(404, {"ok": False, "error": "not found"})
 

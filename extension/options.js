@@ -29,7 +29,74 @@ async function saveSettings() {
   }
 }
 
+async function updateServerStatus(showRefreshMsg) {
+  const el = $('serverStatus')
+  const startBtn = $('btnServerStart')
+  const stopBtn = $('btnServerStop')
+
+  el.textContent = '檢查中...'
+  el.className = 'server-status'
+
+  try {
+    const url = $('serverUrl').value.trim() || 'http://localhost:9801'
+    const resp = await chrome.runtime.sendMessage({ action: 'serverHealthCheck', serverUrl: url })
+    const running = resp && resp.running
+    if (running) {
+      el.textContent = '● 伺服器運行中'
+      el.className = 'server-status running'
+      startBtn.style.display = 'none'
+      stopBtn.style.display = 'inline-block'
+    } else {
+      el.textContent = '○ 伺服器未啟動'
+      el.className = 'server-status stopped'
+      startBtn.style.display = 'inline-block'
+      stopBtn.style.display = 'none'
+    }
+  } catch (e) {
+    el.textContent = '○ 伺服器未啟動'
+    el.className = 'server-status stopped'
+    startBtn.style.display = 'inline-block'
+    stopBtn.style.display = 'none'
+  }
+}
+
+async function onServerStart() {
+  const btn = $('btnServerStart')
+  btn.disabled = true
+  btn.textContent = '啟動中...'
+  try {
+    await chrome.runtime.sendMessage({ action: 'serverStart' })
+    await new Promise(r => setTimeout(r, 5000))
+    await updateServerStatus()
+  } catch (e) {
+    $('serverStatus').textContent = '❌ 啟動失敗：' + e.message
+    $('serverStatus').className = 'server-status error'
+  } finally {
+    btn.disabled = false
+    btn.textContent = '▶ 啟動伺服器'
+  }
+}
+
+async function onServerStop() {
+  const btn = $('btnServerStop')
+  btn.disabled = true
+  try {
+    await chrome.runtime.sendMessage({ action: 'serverStop' })
+    await new Promise(r => setTimeout(r, 2000))
+    await updateServerStatus()
+  } catch (e) {
+    $('serverStatus').textContent = '❌ 停止失敗：' + e.message
+    $('serverStatus').className = 'server-status error'
+  } finally {
+    btn.disabled = false
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings()
+  updateServerStatus()
   $('btnSave').addEventListener('click', saveSettings)
+  $('btnServerStart').addEventListener('click', onServerStart)
+  $('btnServerStop').addEventListener('click', onServerStop)
+  $('btnServerRefresh').addEventListener('click', () => updateServerStatus(true))
 })

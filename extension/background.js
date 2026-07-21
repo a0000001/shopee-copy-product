@@ -38,6 +38,40 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 })
 
+let nativePort = null
+let serverRunning = false
+
+function getNativePort() {
+  if (nativePort) return nativePort
+  try {
+    nativePort = chrome.runtime.connectNative('com.shopee.catalog_server')
+    nativePort.onMessage.addListener(msg => {
+      if (msg.type === 'status') {
+        serverRunning = msg.running
+      }
+    })
+    nativePort.onDisconnect.addListener(() => {
+      nativePort = null
+      serverRunning = false
+    })
+    return nativePort
+  } catch (e) {
+    console.error('[SGC] native host connect failed:', e)
+    return null
+  }
+}
+
+async function checkServerHealth(serverUrl) {
+  try {
+    const resp = await fetch(serverUrl + '/health', { signal: AbortSignal.timeout(3000) })
+    if (resp.ok) {
+      const data = await resp.json()
+      return data.ok === true
+    }
+  } catch { }
+  return false
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'download') {
     handleDownloads(msg).then(sendResponse)
@@ -53,6 +87,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     checkPngMagic(msg.url)
       .then(isPng => sendResponse({ isPng }))
       .catch(() => sendResponse({ isPng: false }))
+    return true
+  }
+  if (msg.action === 'serverStatus') {
+    const port = getNativePort()
+    if (port) {
+      port.postMessage({ type: 'status' })
+      sendResponse({ nativeAvailable: true, serverRunning })
+    } else {
+      sendResponse({ nativeAvailable: false, serverRunning })
+    }
+    return true
+  }
+  if (msg.action === 'serverStart') {
+    const port = getNativePort()
+    if (!port) {
+      sendResponse({ ok: false, error: '無法連接到 Native Host，請先執行 install-native-host.ps1' })
+      return true
+    }
+    port.postMessage({ type: 'start', catalog_path: msg.catalogPath || '' })
+    sendResponse({ ok: true })
+    return true
+  }
+  if (msg.action === 'serverStop') {
+    const port = getNativePort()
+    if (port) {
+      port.postMessage({ type: 'stop' })
+    }
+    sendResponse({ ok: true })
+    return true
+  }
+  if (msg.action === 'serverHealthCheck') {
+    checkServerHealth(msg.serverUrl || 'http://localhost:9801').then(running => {
+      sendResponse({ running })
+    })
     return true
   }
 })
