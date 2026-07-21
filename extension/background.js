@@ -132,7 +132,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: false, error: '無法連接到 Native Host，請先執行 install-native-host.ps1' })
       return true
     }
-    port.postMessage({ type: 'start', catalog_path: msg.catalogPath || '' })
+    const nativeMsg = { type: 'start' }
+    if (msg.catalogPath) nativeMsg.catalog_path = msg.catalogPath
+    port.postMessage(nativeMsg)
     const waitForRunning = new Promise((resolve) => {
       const timer = setTimeout(() => {
         resolve({ ok: false, error: 'Native Host 無回應' })
