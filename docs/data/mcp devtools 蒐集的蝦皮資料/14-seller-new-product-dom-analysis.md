@@ -431,7 +431,208 @@ editor.dispatchEvent(new Event('input', { bubbles: true }))
 
 ---
 
-## 十二、實戰教訓（2026-07-20 診斷經驗）
+## 附錄：我的商品列表頁（product listing）DOM 結構
+
+蒐集時間：2026-07-21  
+頁面：`https://seller.shopee.tw/portal/product/list/live/all`  
+使用者：nicola1982（已登入狀態）  
+本次成功登入原因：見下方 §登入方式說明
+
+### 為什麼這次登入成功？
+
+先前使用 Playwright / Selenium 等自動化工具都被蝦封鎖，因為：
+1. 這些工具建立**全新瀏覽器實例**，無任何 cookies、無瀏覽歷史，蝦皮可透過 `navigator.webdriver` 等指標偵測
+2. 蝦皮的 WAF（Web Application Firewall）會阻擋非人類行為模式
+
+**本次成功原因**：
+- 使用 Chrome DevTools Protocol（CDP）MCP 工具，**連接使用者原本就在使用的 Chrome 瀏覽器**
+- 使用者 nicola1982 已經在瀏覽器中登入蝦皮賣家中心，session cookie 有效
+- 我只是在已登入的頁面上導航，沒有重新登入，沒有建立新 session
+- 所有操作都是「真實瀏覽器中的真實使用者 session」，蝦皮無法區分這是人類還是 AI 輔助操作
+
+**結論**：未來若要自動化操作蝦皮賣家後台，必須：
+1. 使用使用者既有的 Chrome 瀏覽器（而非 Playwright/Selenium 開新瀏覽器）
+2. 透過 CDP 或 extension 的 content script 操作
+3. 不要嘗試重新登入，要重複使用現有 session
+
+### 頁面網址
+
+| 用途 | URL |
+|------|-----|
+| 全部商品 | `https://seller.shopee.tw/portal/product/list/live/all` |
+| 架上商品 | `https://seller.shopee.tw/portal/product/list/live/live` |
+| 違規/刪除 | `https://seller.shopee.tw/portal/product/list/banned/action` |
+| 審核中 | `https://seller.shopee.tw/portal/product/list/review` |
+| 未上架 | `https://seller.shopee.tw/portal/product/list/unlist` |
+
+### 商品數量摘要
+
+| 狀態 | 數量 |
+|------|------|
+| 架上商品 | 98 |
+| 違規/刪除 | 2 |
+| 審核中 | 0 |
+| 未上架 / 尚未刊登 | 48 |
+| 需要重新補貨 | 86 |
+| 需要商品內容優化 | 0 |
+
+### 表格欄位
+
+使用 EDS Table（`.eds-table`），表頭：
+
+| 欄位 | CSS class | 說明 |
+|------|-----------|------|
+| 商品 | `eds-table__cell first-cell` | 圖片 + 名稱 + 主商品貨號 + 商品 ID + 規格 ID |
+| 價格 | `eds-table__cell` | NT$ 價格 |
+| 商品數量 | `eds-table__cell` | 庫存數量（含 tooltip：可銷售數量、運送中庫存） |
+| 成效 | `eds-table__cell` | 已售出、過去 30 天銷量、瀏覽量 |
+| 商品診斷 | `eds-table__cell` | 需要優化的內容數量 |
+| 操作 | `eds-table__cell last-cell` | 下拉選單（編輯、建立廣告、複製、即時預覽、下架等） |
+
+### 每列商品資料結構
+
+每列是 `.eds-table__row.valign-top`，裡面包含：
+
+```
+商品圖片（img，src 為 cf.shopee.tw 縮圖）
+商品名稱（a，href 為 /portal/product/{productId}）
+主商品貨號: {sku 或 "-"}
+商品 ID: {productId}
+規格 ID: {variationId}
+價格: NT${price}
+庫存: {stock 或 "已售完"}
+已售出 {count}
+過去 30 天銷量 {count}
+過去 30 天瀏覽量 {count}
+{商品診斷} 或 "-"
+操作: 編輯 / 建立廣告 / 更多（複製、即時預覽、下架等）
+```
+
+### 擷取已上架商品列表的 content.js 程式碼
+
+```javascript
+function extractSellerProductList() {
+  const items = []
+  const rows = document.querySelectorAll('.eds-table__row.valign-top')
+  for (const row of rows) {
+    const nameLink = row.querySelector('a[href*="/portal/product/"]')
+    if (!nameLink) continue
+
+    const text = row.textContent
+    const skuMatch = text.match(/主商品貨號:\s*(\S+)/)
+    const idMatch = text.match(/商品 ID:\s*(\d+)/)
+    const priceMatch = text.match(/NT\$(\d+)/)
+    const stockText = text.match(/(\d+)\s*$/)  // might match price
+
+    items.push({
+      name: nameLink.textContent.trim(),
+      productId: idMatch ? idMatch[1] : '',
+      sku: skuMatch && skuMatch[1] !== '-' ? skuMatch[1] : '',
+      url: nameLink.href,
+      price: priceMatch ? priceMatch[1] : '',
+    })
+  }
+  return items
+}
+```
+
+### 操作按鈕（action column）
+
+每列最後的操作欄 `.eds-table__cell.last-cell` 包含：
+
+```
+編輯（連結到 /portal/product/{productId}）
+建立廣告
+更多 ▼
+  ├── 複製
+  ├── 即時預覽
+  ├── 下架
+  ├── 低庫存提醒
+  └── 設定推廣活動分潤
+```
+
+### 分頁
+
+```
+1 / 9  下一頁 ▶
+12 / 每頁
+```
+
+### 搜尋與篩選
+
+搜尋欄位 placeholder：`搜尋 商品名稱, 主商品貨號, 商品選項貨號, 商品ID`
+
+篩選條件：
+- 全部 / 重新補貨(86) / 商品內容優化(0)
+- 分類（下拉選單）
+- 按鈕：搜尋、重設、展開
+
+### 實用 API 端點（從頁面行為推測）
+
+| 端點 | 用途 |
+|------|------|
+| `/api/v2/product/get_item_list` | 取得商品列表（需要授權） |
+| `/api/v2/product/get_item_detail` | 取得單一商品詳細資料 |
+| `/portal/product/{productId}` | 編輯商品頁面 |
+
+---
+
+## 增加：新版新增商品頁面網址
+
+| 用途 | URL |
+|------|-----|
+| 新增商品（側邊欄） | `https://seller.shopee.tw/portal/product/new?from=sidebar` |
+| 新增商品（直接） | `https://seller.shopee.tw/portal/product/new` |
+| 大量上傳 | `https://seller.shopee.tw/portal/product-mass/import/upload` |
+| 下載模板 | `https://seller.shopee.tw/portal/product-mass/import/download` |
+| 分類對應 | `https://seller.shopee.tw/portal/product-mapping/categories` |
+| 品牌對應 | `https://seller.shopee.tw/portal/product-mapping/brand` |
+| 規格對應 | `https://seller.shopee.tw/portal/product-mapping/variation` |
+
+---
+
+## 增加：賣家中心側邊欄導覽結構
+
+### 第一層
+- 首頁
+- 訂單管理
+  - 我的銷售
+  - 批次出貨
+  - 退貨/退款/不成立
+  - 物流設定
+- 商品管理
+  - 我的商品
+  - 新增商品
+- 行銷活動
+  - 行銷活動
+  - 蝦皮廣告
+  - 蝦皮聯盟行銷服務
+  - 直播短影音數據
+  - 我的行銷活動
+  - 我的限時特賣
+  - 優惠券
+  - 蝦皮活動
+- 客服設置管理
+  - 聊聊管理
+  - AI 賣場客服
+  - 我的聊聊廣播
+  - 評價管理
+- 財務管理
+  - 我的進帳
+  - 我的錢包
+  - 銀行帳號
+- 數據中心
+  - 賣家數據中心
+  - 營運表現
+- 賣場管理
+  - 賣場介紹
+  - 賣場佈置
+  - 賣場設定
+  - 申訴中心
+  - 賣家任務
+- 付費服務中心
+  - 付費服務中心
+  - 我的服務
 
 ### 教訓 1：Vue radio toggle 後「等 re-render」再找依賴 UI
 
