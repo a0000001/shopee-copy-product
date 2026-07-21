@@ -208,6 +208,12 @@ def main():
         default=str(DEFAULT_CATALOG),
         help=f"商品目錄 JSON 路徑（預設：{DEFAULT_CATALOG}）",
     )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=9801,
+        help="伺服器埠號（預設：9801）",
+    )
     args = parser.parse_args()
 
     global catalog_path
@@ -217,11 +223,11 @@ def main():
         print(f"[錯誤] 找不到目錄檔案：{catalog_path}")
         return
 
-    server = HTTPServer(("localhost", 9801), Handler)
-    print(f"[目錄伺服器] 啟動於 http://localhost:9801")
+    server = HTTPServer(("localhost", args.port), Handler)
+    print(f"[目錄伺服器] 啟動於 http://localhost:{args.port}")
     print(f"[目錄檔案] {catalog_path}")
     print(f"[請求日誌] {LOG_FILE}")
-    print(f"[健康檢查] http://localhost:9801/health")
+    print(f"[健康檢查] http://localhost:{args.port}/health")
     print()
     try:
         server.serve_forever()

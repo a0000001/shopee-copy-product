@@ -5,6 +5,8 @@ BASE = Path(__file__).resolve().parent.parent
 CATALOG_SRC = BASE / "docs" / "data" / "product-catalog-tw.json"
 CATALOG_TEST = BASE / "docs" / "data" / "product-catalog-tw.test.json"
 SERVER = BASE / "scripts" / "local-catalog-server.py"
+TEST_PORT = 9802
+BASE_URL = f"http://localhost:{TEST_PORT}"
 
 passed = 0
 failed = 0
@@ -30,7 +32,7 @@ def api(path, method="GET", body=None):
         if body:
             payload.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
             cmd += ["-d", f"@{payload}"]
-    cmd += [f"http://localhost:9801{path}"]
+    cmd += [f"{BASE_URL}{path}"]
     r = subprocess.check_output(cmd, encoding="utf-8", errors="replace").strip()
     return json.loads(r) if r else {}
 
@@ -50,11 +52,21 @@ check("中文未逃逸", "\\u" not in CATALOG_SRC.read_text(encoding="utf-8"))
 # ── Step 2: Start server and test ──
 print("\n=== 2. 測試目錄伺服器 ===\n")
 
+# Kill any lingering server on test port, then clean up old test file
+import urllib.request
+try:
+    urllib.request.urlopen(f"{BASE_URL}/shutdown", timeout=1)
+except: pass
+CATALOG_TEST.unlink(missing_ok=True)
+
 shutil.copy2(CATALOG_SRC, CATALOG_TEST)
 base_count = len(data)
 
+server = None
+old_server = None
+
 server = subprocess.Popen(
-    [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST)],
+    [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST), "--port", str(TEST_PORT)],
     cwd=BASE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
 )
 time.sleep(2)
@@ -70,7 +82,7 @@ try:
     time.sleep(1)
     old_server = server
     server = subprocess.Popen(
-        [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST)],
+        [sys.executable, str(SERVER), "--catalog-path", str(CATALOG_TEST), "--port", str(TEST_PORT)],
         cwd=BASE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     time.sleep(2)
@@ -127,11 +139,13 @@ try:
     check("JSON 無毀損", all("ps_product_name" in item for item in final))
 
 finally:
-    server.terminate()
-    try:
-        server.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        server.kill()
+    for proc in [old_server, server]:
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
     CATALOG_TEST.unlink(missing_ok=True)
     (BASE / "tmp-test-payload.json").unlink(missing_ok=True)
 

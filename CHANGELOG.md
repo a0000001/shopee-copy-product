@@ -64,6 +64,11 @@
 - `popup.js` — 新增 `loadAutoCatalogSetting`、`saveAutoCatalogSetting`、`initAutoCatalogCheckbox`；`btnCopy` 點擊後若 checkbox 勾選，複製完 JSON 自動呼叫 `submitToCatalog`；checkbox 狀態存入 `chrome.storage.sync`；反核選時彈出 `confirm` 確認
 - `scripts/test-catalog-server.py` — 測試更新為檢查 `chkAutoCatalog` 取代 `btnCatalog`，增加 1 項測試（共 51 項）
 
+### 修正：測試與 Extension 伺服器埠號衝突
+
+- `local-catalog-server.py` — 新增 `--port` 參數，可指定埠號（預設 9801）
+- `test-catalog-server.py` — 改用 port 9802 執行測試，與 Extension 的 9801 完全隔離；加入啟動前清理殘留伺服器、`finally` 同時清理 `old_server` 與 `server` 雙重保護
+
 ## 2026-07-20
 
 ### 修正
