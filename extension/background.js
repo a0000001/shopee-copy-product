@@ -72,6 +72,23 @@ async function checkServerHealth(serverUrl) {
   return false
 }
 
+async function appendToCatalog(serverUrl, product) {
+  try {
+    const resp = await fetch(serverUrl + '/append', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product }),
+    })
+    const result = await resp.json()
+    if (!resp.ok) {
+      return { ok: false, error: result.error || `HTTP ${resp.status}` }
+    }
+    return result
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'download') {
     handleDownloads(msg).then(sendResponse)
@@ -87,6 +104,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     checkPngMagic(msg.url)
       .then(isPng => sendResponse({ isPng }))
       .catch(() => sendResponse({ isPng: false }))
+    return true
+  }
+  if (msg.action === 'appendToCatalog') {
+    appendToCatalog(msg.serverUrl || 'http://localhost:9801', msg.product || {})
+      .then(sendResponse)
+      .catch(err => sendResponse({ ok: false, error: err.message }))
     return true
   }
   if (msg.action === 'serverStatus') {

@@ -16,24 +16,22 @@ async function loadServerUrl() {
 }
 
 async function submitToCatalog(data) {
-  const json = toJsonClipboard(data)
-  const product = JSON.parse(json)[0]
-
   try {
-    const resp = await fetch(`${_serverUrl}/append`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product }),
+    const json = toJsonClipboard(data)
+    const product = JSON.parse(json)[0]
+    const result = await chrome.runtime.sendMessage({
+      action: 'appendToCatalog',
+      serverUrl: _serverUrl,
+      product,
     })
-    const result = await resp.json()
-    if (result.ok && result.action === 'appended') {
+    if (result?.ok && result.action === 'appended') {
       showToast('✅ 已寫入目錄')
-    } else if (result.ok && result.action === 'appended_with_warning') {
+    } else if (result?.ok && result.action === 'appended_with_warning') {
       showToast('⚠️ ' + (result.reason || '已寫入，但名稱相似'))
-    } else if (result.ok && result.action === 'skipped') {
+    } else if (result?.ok && result.action === 'skipped') {
       showToast('⏭ ' + result.reason)
     } else {
-      showToast('❌ ' + (result.error || '伺服器錯誤'))
+      showToast('❌ ' + (result?.error || '伺服器錯誤'))
     }
   } catch (e) {
     showToast('❌ 無法連線 (' + _serverUrl + '): ' + e.message)
