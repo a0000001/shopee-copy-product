@@ -1,55 +1,93 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>批次上傳測試</title></head>
+<head><meta charset="utf-8"><title>批次上傳測試</title>
+<style>
+  body { font-family: monospace; padding: 20px; }
+  h1 { font-size: 18px; }
+  button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  #output {
+    margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 6px;
+    min-height: 100px; font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+    max-height: 400px; overflow-y: auto;
+  }
+  .ok { color: #26aa99; }
+  .fail { color: #e74c3c; }
+  .info { color: #666; }
+  .btn-row { margin-top: 12px; display: flex; gap: 8px; }
+</style>
+</head>
 <body>
   <h1>批次上傳最小測試</h1>
   <button id="btnTest">測試：開新分頁 → 送訊息</button>
-  <pre id="output" style="margin-top:16px;padding:12px;background:#f5f5f5;border-radius:6px;min-height:100px;font-size:12px;line-height:1.5;"></pre>
+  <div class="btn-row">
+    <button id="btnCopyLog">📋 複製日誌</button>
+  </div>
+  <div id="output">按「測試」按鈕開始...</div>
   <script>
-    const $ = id => document.getElementById(id)
+    console.log('[SGC-test] chrome:', typeof chrome)
+    console.log('[SGC-test] chrome.tabs:', typeof chrome?.tabs)
     const out = document.getElementById('output')
 
-    function log(msg) {
-      out.textContent += '[' + new Date().toLocaleTimeString() + '] ' + msg + '\n'
+    function log(msg, type) {
+      const line = document.createElement('div')
+      line.className = type || 'info'
+      line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg
+      out.appendChild(line)
     }
 
-    document.getElementById('btnTest').addEventListener('click', async () => {
-      out.textContent = ''
-      log('開始測試...')
+    document.getElementById('btnCopyLog').addEventListener('click', () => {
+      const text = Array.from(out.children).map(el => el.textContent).join('\n')
+      navigator.clipboard.writeText(text).then(() => {
+        log('已複製日誌', 'ok')
+      }).catch(() => {
+        log('複製失敗', 'fail')
+      })
+    })
 
+    document.getElementById('btnTest').addEventListener('click', async () => {
+      out.innerHTML = ''
       let tab = null
       try {
-        // 1. 開新分頁
-        log('建立新分頁...')
+        log('1. 確認 chrome API 可用...', 'info')
+        log('   chrome.tabs: ' + (typeof chrome?.tabs), 'info')
+        log('   chrome.tabs.sendMessage: ' + (typeof chrome?.tabs?.sendMessage), 'info')
+
+        log('2. 建立新分頁...', 'info')
         tab = await chrome.tabs.create({
           url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
         })
-        log('tab.id: ' + tab.id)
-        log('tab.url: ' + tab.url)
-        log('tab.status: ' + tab.status)
+        log('   tab.id: ' + tab.id, 'info')
+        log('   tab.url: ' + tab.url, 'info')
+        log('   tab.status: ' + tab.status, 'info')
+        log('   tab.index: ' + tab.index, 'info')
+        log('   tab.windowId: ' + tab.windowId, 'info')
 
-        // 2. 等待載入
-        log('等待分頁載入...')
+        log('3. 等待分頁載入完成（onUpdated + complete）...', 'info')
         await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('超時')), 20000)
+          const timer = setTimeout(() => reject(new Error('分頁載入超時')), 20000)
           function onUpdated(id, info) {
             if (id === tab.id && info.status === 'complete') {
               chrome.tabs.onUpdated.removeListener(onUpdated)
               clearTimeout(timer)
+              log('   收到 status=complete', 'info')
               setTimeout(resolve, 1000)
             }
           }
           chrome.tabs.onUpdated.addListener(onUpdated)
         })
-        log('分頁載入完成')
+        log('   分頁載入完成', 'ok')
 
-        // 3. 送測試訊息
-        log('送出 ping 訊息...')
-        const result = await chrome.tabs.sendMessage(tab.id, { action: 'ping' })
-        log('✅ ping 成功：' + JSON.stringify(result))
+        log('4. 取得分頁最新資訊...', 'info')
+        const updatedTab = await chrome.tabs.get(tab.id)
+        log('   url: ' + updatedTab.url, 'info')
+        log('   status: ' + updatedTab.status, 'info')
+        log('   title: ' + updatedTab.title, 'info')
 
-        // 4. 送 fillProductData
-        log('送出 fillProductData...')
+        log('5. 送出 ping 訊息...', 'info')
+        const pingResult = await chrome.tabs.sendMessage(tab.id, { action: 'ping' })
+        log('   ping 成功: ' + JSON.stringify(pingResult), 'ok')
+
+        log('6. 送出 fillProductData...', 'info')
         const testData = {
           ps_product_name: '測試商品請勿下單',
           ps_price: 999,
@@ -58,18 +96,24 @@
           ps_category: '100644,101937',
         }
         const fillResult = await chrome.tabs.sendMessage(tab.id, { action: 'fillProductData', data: testData })
-        log('✅ fillProductData 成功：' + JSON.stringify(fillResult))
+        log('   fillProductData 成功: ' + JSON.stringify(fillResult), 'ok')
+
+        log('7. 送出 checkSaveButton...', 'info')
+        const checkResult = await chrome.tabs.sendMessage(tab.id, { action: 'checkSaveButton' })
+        log('   checkSaveButton: ' + JSON.stringify(checkResult), 'ok')
+
+        log('✅ 全部測試通過', 'ok')
 
       } catch (e) {
-        log('❌ 錯誤：' + e.message)
-        log('❌ 錯誤類型：' + e.constructor.name)
-        log('❌ stack：' + (e.stack || '無'))
+        log('❌ 錯誤: ' + e.message, 'fail')
+        log('❌ 類型: ' + e.constructor.name, 'fail')
+        log('❌ stack: ' + (e.stack || '無'), 'fail')
       } finally {
         if (tab && tab.id) {
           setTimeout(() => {
             try { chrome.tabs.remove(tab.id) } catch {}
-            log('測試分頁已關閉')
-          }, 3000)
+            log('測試分頁已關閉', 'info')
+          }, 2000)
         }
       }
     })

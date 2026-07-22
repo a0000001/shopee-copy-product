@@ -167,6 +167,38 @@ if (msg.action === 'clickSaveButton') {
   3. `content_scripts.matches` 對 `product/new?from=sidebar` 沒有完全匹配
 - 需確認：console 完整 stack trace、content.js message listener 區塊、manifest content_scripts 設定
 
+## 資料流問題
+
+### ps_category 資料流斷裂（Claude 審核發現）
+
+`ps_category` 在整個系統中是「只寫不讀」的死資料：
+
+```
+popup.js toJsonClipboard()
+  → 寫入 ps_category（從 <select> 讀取，目前唯一值 "100644,101937"）
+  → 存入 JSON 檔案
+
+batch-upload.js
+  → 直接傳送整筆 item（含 ps_category）給 fillProductData
+
+content.js fillCategoryAsync()
+  → ❌ 完全沒讀取 data.ps_category
+  → 寫死比對中文字串「電腦與周邊配件」「軟體」
+  → 在類別選單中固定尋找這些文字
+```
+
+**目前能運作**純粹因為只有一個類別選項（電腦與周邊配件 > 軟體）。一旦新增第二個類別選項，批次上傳仍會把所有商品硬塞進同一個類別。
+
+**修正方向：** `fillCategoryAsync` 應讀取 `data.ps_category` 依代碼比對，保留現有文字比對作為找不到代碼對應時的 fallback。
+
+### 其他已知問題
+
+| 位置 | 問題 |
+|------|------|
+| `content.js:1344-1381 vs 1384-1399` | `chrome.runtime.onMessage` 與 `window.postMessage` 兩套 action 分派，`clickSaveButton` 只在前者有，後者沒有 |
+| `popup.js:306 CATEGORY_MAP` | 宣告後從未被任何函數呼叫 |
+| `content.js checkSaveButton` | 用正則對頁面所有按鈕比對，未限定容器，類別彈窗未關閉時可能誤判 |
+
 ## 尚未確定的問題
 
 1. **Illegal invocation 根因** — `chrome.tabs.sendMessage` 對新開分頁失敗，但對已開啟分頁正常。`tab.url` 為 `undefined` 但 `tab.id` 有效。  
