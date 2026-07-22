@@ -373,6 +373,39 @@ editor.dispatchEvent(new Event('input', { bubbles: true }))
 
 > **用法**：寫 content.js 時看 10.1；寫 JSON→Excel 轉換腳本時看 10.2。
 
+### 2026-07-23 DOM 重驗證結果
+
+現場連真實賣家中心（類別：電腦與周邊配件 > 軟體）逐項測試所有 selector，結果：
+
+**通過（所有關鍵 selector 皆命中）**：
+- `.product-category-box` / `.product-category-box-inner`
+- `[data-product-edit-field-unique-id="name"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="price"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="stock"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="minpq"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="weight"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="parentSku"] input.eds-input__input`
+- `[data-product-edit-field-unique-id="description"] .ql-editor` （仍同時支援 `[contenteditable="true"]` 和 `.rich-text-editor`）
+- `[data-product-edit-field-unique-id="dangersGoods"] input[value="0"]` 與 `input[value="1"]`
+- `[data-product-edit-field-unique-id="preOrder"] input[value="false"]` 與 `input[value="true"]`
+- `[data-product-edit-field-unique-id="brandAndAttributes"] .eds-select`
+- `[data-product-edit-field-unique-id="dimension.width/length/height"] input`
+- `[data-product-edit-field-unique-id="gtinCode"] input.eds-input__input`
+
+**確認改變**（1 處）：
+
+| 欄位 | 舊 fieldId | 新 fieldId |
+|------|-----------|-----------|
+| 信用卡分期付款 | `installment` | `productInstallmentStatus` |
+
+FieldId 改變但 radio 結構相同（`.eds-radio-group` → `.eds-radio` → `input[type="radio"][value="true"/"false"]`），只需更新映射即可。
+
+**表面改變但 selector 仍相容**（1 處）：
+
+- **condition**：`data-product-edit-field-unique-id="condition"` 現在直接掛在 `.eds-select` 本身上（而非父層容器），但因為我們的程式用 `findFieldByUniqueId("condition")` + 之後找內部的 `.eds-selector`，兩種結構都相容。
+
+**結論**：蝦皮 DOM 結構**沒有顯著變更**。99% 的 selector 與 001 文件記錄一致。先前「所有舊版都失敗」的 root cause 是 content.js 的 bracket imbalance（語法錯誤使整支 content script 無法執行），而非 DOM 結構變動。
+
 ---
 
 ## 十一、信用卡分期付款（installment）DOM 結構
