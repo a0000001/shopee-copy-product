@@ -2,7 +2,17 @@
 
 > 本文件記錄 Shopee Copy Product 所有歷史變更。2026-07-19 前之紀錄由原 repo (`S:\projects\shopee`) git history 遷移整理，commit hash 保留供交叉參考。
 
-## 2026-07-22
+## 2026-07-23
+
+### 修復：Bracket Imbalance + Popup 不回報真實填入結果
+
+- `extension/content.js` — 🔥 **修復 bracket imbalance（主因）**：移除第 948~955 行 dangling `async function fillCategoryAsync` 殘碼。該殘碼僅有宣告開頭、無完整主體，導致整支 content script 語法錯誤無法執行。所有舊版 checkout 回來也都帶著此殘碼，所以呈現「全部版本都失敗」。
+- `extension/content.js` — `setNativeValue` 簡化 `proto.set` try-catch 範圍（僅包 set.call，不包整段）；補上 contenteditable 分支的 change event；移除 `isContentEditable` 與 `.rich-text-editor` 兩個誤判條件（那些是 Shopee Vue wrapper，不是真實輸入框）
+- `extension/content.js` — `findFieldByLabel` fieldId 路由、row 路由、ant-label 路由全面移除 `.rich-text-editor` 與 `[contenteditable="true"]` 誤判；調整 contenteditable 僅在真正該用的地方保留
+- `extension/popup.js` — 🔥 **修 polling bug**：原程式發送 `fillProductData` 後直接讀取 `resp.results`，但 content.js 立即回 `{ ok: true, status: 'started' }`（填入才剛開始），導致永遠顯示「✅ 完成 0/0 個欄位」。修正為 polling `checkFillStatus`（每 500ms × 120 次 = 60 秒），等 `status === 'done'` 再顯示真實結果。
+- `docs/spec/025-商品描述文字填寫壞了的修復方法.md` — 修正第五節：推翻「Shopee 改 DOM」假說，記錄真正 root cause（bracket imbalance + popup polling bug），補充 CDP 實測驗證結果（所有欄位填入均正常）
+- `docs/data/001-賣家中心新增商品（seller-new-product-dom-analysis）.md` — 新增 §10.3 重驗證結果：99% selector 仍可命中，唯一變更為 `installment` → `productInstallmentStatus`
+- 所有異動經 CDP 連線真實賣家中心實測驗證通過：text input、Quill editor、EDS Select（品牌）、信用卡分期（radio + Modal + tenure bubble）
 
 ### 批次上傳 Extension 分頁修復與防禦優化
 
