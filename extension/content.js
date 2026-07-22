@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   console.log('[SGC] content.js loaded, URL:', window.location.href)
   const SHOPEE_IMG_DOMAIN = 'down-tw.img.susercontent.com'
 
@@ -1591,48 +1591,52 @@
     let pages = Math.ceil(total / 12)
     let curPage = parseInt(new URL(location.href).searchParams.get('page') || '1')
 
-    // 2. 嘗試同源 API 拉取（isolated world 可能繞過反爬）
+    // 2. API attempt (Plan A) - supplement only, SPA pagination always runs after
+    //    Per 024 spec: if API returns partial data, Plan B (SPA) fills the rest.
     const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ''
     const realApiUrl = '/api/v3/opt/mpsku/list/v2/search_product_list'
       + '?SPC_CDS=' + encodeURIComponent(cds)
       + '&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false'
-    let apiOk = false
     try {
       const res = await fetch(realApiUrl, { credentials: 'include' })
       if (res.ok) {
         const json = await res.json()
         const list = json?.data?.products || []
+        const beforeApi = items.length
         if (Array.isArray(list) && list.length > 0) {
-          console.log(`[SGC] API 命中 ${list.length} 筆`)
           for (const p of list) {
             const name = (p.name || '').trim()
             if (name && !nameSet.has(name)) {
               nameSet.add(name)
-              items.push({
-                name, productId: String(p.id||''), sku: p.parent_sku||'', url: '', price: p.price_detail?.price_min||''
-              })
+              items.push({ name, productId: String(p.id||''), sku: p.parent_sku||'', url: '', price: p.price_detail?.price_min||'' })
             }
           }
-          apiOk = true
         }
+        console.log('[SGC] API ' + res.status + ': ' + list.length + ' items, ' + (items.length - beforeApi) + ' new')
+      } else {
+        console.log('[SGC] API HTTP ' + res.status + ', falling back to SPA pagination')
       }
-    } catch (e) { console.error(`[SGC] API 例外: ${e.message}`) }
+    } catch (e) { console.log('[SGC] API error: ' + e.message) }
 
-    if (apiOk) {
-      console.log(`[SGC] API 回傳 ${items.length} 筆`)
-      return items
-    }
-
-    // 3. API 被擋 → SPA 點擊翻頁補齊
-    console.log(`[SGC] API 不可用，SPA 翻頁收集 (${items.length}/${total})`)
-    while (curPage < pages && items.length < total) {
-      if (!clickNextPage()) { console.log('[SGC] 無下一頁按鈕'); break }
+    // 3. SPA click pagination (Plan B - confirmed working, per 024 spec)
+    //    Runs regardless of API outcome.
+    //    Old loop: while(curPage < pages && items.length < total)
+    //      Bug: if readTotal() returns 0 -> pages=0 -> loop never starts.
+    //    New approach: keep clicking next until button gone or no new items.
+    console.log('[SGC] SPA pagination start (' + items.length + ' collected so far)')
+    const MAX_PAGES = 50
+    let pagesVisited = 0
+    while (pagesVisited < MAX_PAGES) {
+      if (!clickNextPage()) { console.log('[SGC] No next-page button, SPA done'); break }
       await waitForRender()
+      const prev = items.length
       collectFromDOM()
-      total = readTotal()
-      pages = Math.ceil(total / 12)
-      curPage = parseInt(new URL(location.href).searchParams.get('page') || String(curPage+1))
-      console.log(`[SGC] SPA 翻頁 ${curPage}/${pages} | ${items.length}/${total}`)
+      pagesVisited++
+      curPage = parseInt(new URL(location.href).searchParams.get('page') || String(curPage + 1))
+      console.log('[SGC] SPA page ' + curPage + ': +' + (items.length - prev) + ' new, total=' + items.length)
+      if (items.length === prev) { console.log('[SGC] No new items this page, SPA done'); break }
+      const t = readTotal()
+      if (t > 0 && items.length >= t) { console.log('[SGC] Reached total count, SPA done'); break }
     }
 
     // 4. 備用：若 DOM 完全沒抓到，從表格列抓

@@ -67,24 +67,29 @@ document.getElementById('btnRunScan').addEventListener('click', async () => {
               return new Promise(r=>{let l=tb.innerHTML;const o=new MutationObserver(()=>{if(tb.innerHTML!==l){o.disconnect();setTimeout(r,400)}});o.observe(tb,{childList:true,subtree:true});setTimeout(()=>{o.disconnect();r()},t||6000)})
             }
 
-            // 1. API（main world 通常被擋）
+            // 1. API (main world - usually blocked, supplement only, no early return)
             const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
             try {
               const r = await fetch('/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS='+encodeURIComponent(cds)+'&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false',{credentials:'include'})
               if (r.ok) {
                 const list = (await r.json())?.data?.products||[]
-                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}; if(items.length>0) return items }
+                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}}
               }
             } catch(e) {}
 
-            // 2. DOM + SPA 翻頁
+            // 2. SPA click pagination (Plan B - always runs, confirmed working)
+            //    Old: while(cur<pages&&items.length<total) breaks if readTotal()=0
+            //    New: keep clicking until next-button gone or no new items
             collectDOM()
-            let total=readTotal(), pages=Math.ceil(total/12), cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
-            while (cur<pages && items.length<total) {
+            let cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
+            const MAX=50; let visited=0
+            while (visited<MAX) {
               if (!clickNext()) break
               await waitTable()
-              collectDOM()
-              total=readTotal(); pages=Math.ceil(total/12); cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
+              const prev=items.length; collectDOM(); visited++
+              cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
+              if (items.length===prev) break
+              const t=readTotal(); if(t>0&&items.length>=t) break
             }
             return items
           }
