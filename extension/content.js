@@ -588,9 +588,10 @@
   }
 
   function setNativeValue(input, value) {
-    if (input.classList.contains('ql-editor') || input.getAttribute('contenteditable') === 'true' || input.isContentEditable || input.classList.contains('rich-text-editor')) {
+    if (input.classList.contains('ql-editor') || input.getAttribute('contenteditable') === 'true') {
       input.innerHTML = '<p>' + value.split('\n').join('</p><p>') + '</p>'
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }))
       input.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
       return
     }
@@ -600,10 +601,9 @@
     ) || Object.getOwnPropertyDescriptor(
       window.HTMLTextAreaElement.prototype, 'value'
     )
-    try {
-      if (proto?.set) proto.set.call(input, value)
-      else input.value = value
-    } catch (e) {
+    if (proto?.set) {
+      try { proto.set.call(input, value) } catch (e) { input.value = value }
+    } else {
       input.value = value
     }
     input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
@@ -654,8 +654,7 @@
         `[data-product-edit-field-unique-id="${fieldId}"] textarea.eds-input__input, ` +
         `[data-product-edit-field-unique-id="${fieldId}"] textarea, ` +
         `[data-product-edit-field-unique-id="${fieldId}"] [contenteditable="true"], ` +
-        `[data-product-edit-field-unique-id="${fieldId}"] .ql-editor, ` +
-        `[data-product-edit-field-unique-id="${fieldId}"] .rich-text-editor`
+        `[data-product-edit-field-unique-id="${fieldId}"] .ql-editor`
       )
       if (el) return el
     }
@@ -665,7 +664,7 @@
       if (!labelEl) continue
       const text = (labelEl.textContent || '').trim().replace(/[\s*]+/g, '')
       if (text === cleanLabel || text.includes(cleanLabel) || cleanLabel.includes(text)) {
-        const input = row.querySelector('input.eds-input__input, input, textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor, .rich-text-editor')
+        const input = row.querySelector('input.eds-input__input, input, textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor')
         if (input) return input
       }
     }
@@ -677,7 +676,7 @@
       const forId = lb.getAttribute('for')
       if (forId) { const el = document.getElementById(forId); if (el) return el }
       const next = lb.nextElementSibling
-      if (next && next.matches('input, textarea, select, [contenteditable="true"]')) return next
+      if (next && next.matches('input, textarea, select')) return next
       const item = lb.closest('.ant-form-item, [class*="form-item"], [class*="field"]')
       if (item) { const el = item.querySelector('input, textarea, [contenteditable="true"]'); if (el) return el }
     }
