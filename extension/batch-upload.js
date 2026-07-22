@@ -16,28 +16,39 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function waitForTabReady(tabId, timeout = 25000) {
-  try {
-    const t = await chrome.tabs.get(tabId)
-    if (t && t.status === 'complete') {
-      await sleep(500)
-      return
-    }
-  } catch { }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(onUpdated)
-      reject(new Error('分頁載入超時 (25s)'))
-    }, timeout)
-    function onUpdated(updatedTabId, changeInfo) {
-      if (updatedTabId === tabId && changeInfo.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(onUpdated)
-        clearTimeout(timer)
-        setTimeout(() => resolve(), 500)
+async function waitForTabReady(tabId, timeout = 30000) {
+  const startTime = Date.now()
+  
+  // 1. 等待頁面基本 status complete
+  let isComplete = false
+  while (Date.now() - startTime < timeout) {
+    try {
+      const t = await chrome.tabs.get(tabId)
+      if (t && t.status === 'complete') {
+        isComplete = true
+        break
       }
+    } catch { }
+    await sleep(200)
+  }
+  
+  if (!isComplete) throw new Error('分頁載入狀態逾時 (30s)')
+
+  // 2. 主動 Ping Content Script 確保通訊已建立
+  while (Date.now() - startTime < timeout) {
+    try {
+      const res = await chrome.tabs.sendMessage(tabId, { action: 'ping' })
+      if (res && res.ok) {
+        await sleep(500) // 預留一點緩衝時間讓 Vue 掛載事件
+        return true
+      }
+    } catch (e) {
+      // 忽略錯誤，繼續輪詢 (這就是過濾 Receiving end does not exist)
     }
-    chrome.tabs.onUpdated.addListener(onUpdated)
-  })
+    await sleep(400)
+  }
+  
+  throw new Error('與蝦皮分頁通訊逾時 (Content Script 未啟動或遭阻擋)')
 }
 
 function log(msg, type = 'info') {
@@ -200,8 +211,8 @@ scanProducts()
 
 // ── 步驟 3：兩段式 Fire-and-Forget 上傳單件商品 ──
 async function fillAndSaveSingle(item, tabId) {
-  // 1. 第一段：文字填寫 (Fire-and-Forget)
-  const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: item })
+  // 1. 第一段：文字填寫 (Fire-and-Forget, 跳過媒體上傳避免重複與超時)
+  const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
   if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
 
   // 輪詢等待文字填寫完成 (最多 45 秒)

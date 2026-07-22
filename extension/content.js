@@ -588,10 +588,10 @@
   }
 
   function setNativeValue(input, value) {
-    if (input.classList.contains('ql-editor')) {
+    if (input.classList.contains('ql-editor') || input.getAttribute('contenteditable') === 'true' || input.isContentEditable || input.classList.contains('rich-text-editor')) {
       input.innerHTML = '<p>' + value.split('\n').join('</p><p>') + '</p>'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new Event('blur', { bubbles: true }))
+      input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
+      input.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
       return
     }
 
@@ -600,11 +600,15 @@
     ) || Object.getOwnPropertyDescriptor(
       window.HTMLTextAreaElement.prototype, 'value'
     )
-    if (proto?.set) proto.set.call(input, value)
-    else input.value = value
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    try {
+      if (proto?.set) proto.set.call(input, value)
+      else input.value = value
+    } catch (e) {
+      input.value = value
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
+    input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
     input.focus()
   }
 
@@ -633,6 +637,8 @@
       '商品描述': 'description',
       '價格': 'price',
       '商品數量': 'stock',
+      '數量': 'stock',
+      '庫存': 'stock',
       '最低購買數量': 'minpq',
       '重量': 'weight',
       '主商品貨號': 'parentSku',
@@ -642,7 +648,15 @@
     const fieldId = Object.entries(fieldIdMap).find(([k]) => cleanLabel.includes(k) || k.includes(cleanLabel))?.[1]
 
     if (fieldId) {
-      const el = document.querySelector(`[data-product-edit-field-unique-id="${fieldId}"] input.eds-input__input, [data-product-edit-field-unique-id="${fieldId}"] textarea.eds-input__input, [data-product-edit-field-unique-id="${fieldId}"] .ql-editor`)
+      const el = document.querySelector(
+        `[data-product-edit-field-unique-id="${fieldId}"] input.eds-input__input, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] input, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] textarea.eds-input__input, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] textarea, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] [contenteditable="true"], ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] .ql-editor, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] .rich-text-editor`
+      )
       if (el) return el
     }
 
@@ -651,7 +665,7 @@
       if (!labelEl) continue
       const text = (labelEl.textContent || '').trim().replace(/[\s*]+/g, '')
       if (text === cleanLabel || text.includes(cleanLabel) || cleanLabel.includes(text)) {
-        const input = row.querySelector('input.eds-input__input, textarea.eds-input__input, .ql-editor')
+        const input = row.querySelector('input.eds-input__input, input, textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor, .rich-text-editor')
         if (input) return input
       }
     }
@@ -663,9 +677,9 @@
       const forId = lb.getAttribute('for')
       if (forId) { const el = document.getElementById(forId); if (el) return el }
       const next = lb.nextElementSibling
-      if (next && next.matches('input, textarea, select')) return next
+      if (next && next.matches('input, textarea, select, [contenteditable="true"]')) return next
       const item = lb.closest('.ant-form-item, [class*="form-item"], [class*="field"]')
-      if (item) { const el = item.querySelector('input, textarea'); if (el) return el }
+      if (item) { const el = item.querySelector('input, textarea, [contenteditable="true"]'); if (el) return el }
     }
     return null
   }
@@ -769,14 +783,30 @@
     return { ok: false, error: `找不到品牌選項：${brandName}` }
   }
 
-  async function fillCategoryAsync() {
-    // 檢查是否已選擇正確類別
-    const trigger = document.querySelector('.product-category-box-inner, .product-category-box, [data-product-edit-field-unique-id="category"] .product-category-box-inner')
+  async function fillCategoryAsync(data = {}) {
+    // 1. 檢查是否已經選取類別 (若已有內容且不含 "請選擇" / "選擇類別"，表示已選擇)
+    const triggerSel = [
+      '.product-category-box-inner',
+      '.product-category-box',
+      '[data-product-edit-field-unique-id="category"] .product-category-box-inner',
+      '[data-product-edit-field-unique-id="category"] button',
+      '[data-product-edit-field-unique-id="category"] [class*="box"]',
+      '.edit-row-category'
+    ].join(', ')
+
+    let trigger = document.querySelector(triggerSel)
     if (trigger) {
       const text = (trigger.textContent || '').trim()
-      if (text.includes('電腦與周邊配件') && text.includes('軟體')) {
-        console.log('[SGC] Category "電腦與周邊配件 > 軟體" is already selected.')
+      if (text && !text.includes('請選擇') && !text.includes('選擇類別') && (text.includes('電腦與周邊配件') || text.includes('軟體') || text.length > 5)) {
+        console.log('[SGC] Category is already selected:', text)
         return { ok: true, alreadySelected: true }
+      }
+    }
+
+    if (!trigger) {
+      const categoryField = document.querySelector('[data-product-edit-field-unique-id="category"]')
+      if (categoryField) {
+        trigger = categoryField.querySelector('button, [class*="box"], [class*="inner"], div')
       }
     }
 
@@ -784,40 +814,41 @@
       return { ok: false, error: '找不到類別選擇框' }
     }
 
-    // 點擊展開類別選擇彈窗
+    // 2. 點擊展開類別選擇彈窗
     trigger.focus && trigger.focus()
-    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }))
+    trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }))
     trigger.click()
     console.log('[SGC] Clicked category selector')
 
     // 等待類別選擇彈窗載入
-    const modalList = await waitForElement('.category-list', 2000)
+    const modalList = await waitForElement('.category-list, [class*="category-list"], .category-dialog', 3000)
     if (!modalList) {
       return { ok: false, error: '類別選擇選單未顯示' }
     }
 
-    // 遍歷所有層級，直到無新欄位產生
+    // 動態解構類別名稱
+    let categoryPath = []
+    if (data.category && typeof data.category === 'string') {
+      categoryPath = data.category.split('>').map(s => s.trim())
+    } else if (Array.isArray(data.categoryPath)) {
+      categoryPath = data.categoryPath
+    }
+
+    // 遍歷所有層級
     let colIdx = 0
-    const maxLevels = 5 // 安全上限，避免無窮迴圈
+    const maxLevels = 5
 
     while (colIdx < maxLevels) {
       console.log(`[SGC] Processing category column ${colIdx}`)
-
-      // 等待該欄位出現 (第 0 欄直接取得，後續欄位等待渲染)
       let col = null
-      if (colIdx === 0) {
-        col = document.querySelector('.category-list .scroll-item')
-      } else {
-        // 等待第 colIdx 個欄位出現 (500ms max wait, checking every 50ms)
-        for (let i = 0; i < 10; i++) {
-          const cols = document.querySelectorAll('.category-list .scroll-item')
-          if (cols.length > colIdx) {
-            col = cols[colIdx]
-            break
-          }
-          await new Promise(r => setTimeout(r, 50))
+      for (let i = 0; i < 15; i++) {
+        const cols = document.querySelectorAll('.category-list .scroll-item, [class*="category"] .scroll-item, [class*="category-list"] [class*="scroll"]')
+        if (cols.length > colIdx) {
+          col = cols[colIdx]
+          break
         }
+        await new Promise(r => setTimeout(r, 60))
       }
 
       if (!col) {
@@ -825,29 +856,32 @@
         break
       }
 
-      // 在此欄中選擇適當的項目
-      const items = col.querySelectorAll('.category-item')
+      const items = col.querySelectorAll('.category-item, [class*="category-item"], li')
       if (items.length === 0) {
         console.log(`[SGC] Column ${colIdx} has no items.`)
         break
       }
 
       let targetItem = null
-      if (colIdx === 0) {
-        // 第一級：尋找「電腦與周邊配件」
-        targetItem = Array.from(items).find(el => (el.textContent || '').includes('電腦與周邊配件'))
-      } else if (colIdx === 1) {
-        // 第二級：尋找「軟體」
-        targetItem = Array.from(items).find(el => (el.textContent || '').includes('軟體'))
-      } else {
-        // 第三級及以上：優先尋找「其他」（可能叫「其他」或「其他軟體」等）
-        targetItem = Array.from(items).find(el => {
-          const text = (el.textContent || '').trim()
-          return text === '其他' || text.includes('其他') || text.toLowerCase().includes('other')
-        })
+      const targetText = categoryPath[colIdx]
+
+      if (targetText) {
+        targetItem = Array.from(items).find(el => (el.textContent || '').includes(targetText))
       }
 
-      // 如果沒找到，預設選擇第一個選項
+      if (!targetItem) {
+        if (colIdx === 0) {
+          targetItem = Array.from(items).find(el => (el.textContent || '').includes('電腦與周邊配件') || (el.textContent || '').includes('電腦') || (el.textContent || '').includes('3C'))
+        } else if (colIdx === 1) {
+          targetItem = Array.from(items).find(el => (el.textContent || '').includes('軟體') || (el.textContent || '').includes('Software'))
+        } else {
+          targetItem = Array.from(items).find(el => {
+            const text = (el.textContent || '').trim()
+            return text === '其他' || text.includes('其他') || text.toLowerCase().includes('other')
+          })
+        }
+      }
+
       if (!targetItem) {
         targetItem = items[0]
         console.log(`[SGC] Target not found in column ${colIdx}, fallback to first item:`, targetItem.textContent.trim())
@@ -855,95 +889,62 @@
         console.log(`[SGC] Found target in column ${colIdx}:`, targetItem.textContent.trim())
       }
 
-      // 點擊選取
       targetItem.scrollIntoView && targetItem.scrollIntoView({ block: 'nearest' })
-      targetItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-      targetItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
+      targetItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }))
+      targetItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }))
       targetItem.click()
 
-      // 等待 200ms 以讓子級選單有時間觸發載入
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 300))
       colIdx++
     }
 
+    // 3. 尋找並反複重試點擊「確定」按鈕直至 Modal 關閉
     function findCategoryConfirmButton() {
-      // 1. 尋找包含 .category-list 的 modal/dialog 容器
       const categoryModal = Array.from(document.querySelectorAll(
-        '.eds-modal, .category-dialog, .product-category-selector-modal, div[role="dialog"], .category-dialog-footer'
-      )).find(m => m.querySelector('.category-list') || m.querySelector('.category-item'))
+        '.eds-modal, .category-dialog, .product-category-selector-modal, div[role="dialog"], [class*="category-dialog"], [class*="modal"]'
+      )).find(m => m.querySelector('.category-list, [class*="category-list"], .category-item'))
 
       if (!categoryModal) {
-        console.log('[SGC] Category modal container not found')
-        return null
+        return document.querySelector('.category-dialog-footer button.eds-button--primary, [class*="category"] button.eds-button--primary, [class*="category"] button')
       }
 
-      // 2. 在該 modal 中尋找 primary 按鈕或含有 "確定"/"Confirm" 文字的按鈕
-      const primaryBtn = categoryModal.querySelector('.eds-button--primary, button.eds-button--primary')
-      if (primaryBtn) {
-        console.log('[SGC] Found primary button in category modal:', primaryBtn.textContent.trim())
-        return primaryBtn
-      }
+      const primaryBtn = categoryModal.querySelector('.eds-button--primary, button.eds-button--primary, button[type="button"].eds-button--primary')
+      if (primaryBtn) return primaryBtn
 
-      // 3. Fallback: 尋找該 modal 內的所有 button，篩選文字
       const buttons = Array.from(categoryModal.querySelectorAll('button, .eds-button'))
       for (const btn of buttons) {
         const txt = (btn.textContent || '').trim()
         if (txt === '確定' || txt === '确定' || txt === 'Confirm' || txt === 'OK' || txt.includes('確定')) {
-          console.log('[SGC] Found button by text in category modal:', txt)
           return btn
         }
       }
 
-      // 4. 更寬鬆的尋找：只要在 modal 底部（footer）的 primary 按鈕
       const footerBtn = categoryModal.querySelector('[class*="footer"] .eds-button--primary, [class*="footer"] button')
-      if (footerBtn) {
-        console.log('[SGC] Found footer button in category modal:', footerBtn.textContent.trim())
-        return footerBtn
-      }
+      if (footerBtn) return footerBtn
 
       return null
     }
 
-    // 等待確定按鈕可用 (等待最多 3 秒)
-    let confirmBtn = null
-    for (let i = 0; i < 30; i++) {
-      confirmBtn = findCategoryConfirmButton()
+    // 反複嘗試點擊確定按鈕，確保 Modal 關閉
+    for (let i = 0; i < 20; i++) {
+      const confirmBtn = findCategoryConfirmButton()
       if (confirmBtn) {
-        const isDisabled = confirmBtn.disabled ||
-          confirmBtn.hasAttribute('disabled') ||
-          confirmBtn.classList.contains('eds-button--disabled') ||
-          confirmBtn.getAttribute('disabled') === 'true'
-        if (!isDisabled) {
-          console.log('[SGC] Category confirm button is enabled!')
-          break
-        }
+        confirmBtn.focus && confirmBtn.focus()
+        confirmBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }))
+        confirmBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }))
+        confirmBtn.click()
+        console.log(`[SGC] Clicked category confirm button (attempt ${i + 1})`)
       }
-      await new Promise(r => setTimeout(r, 100))
+      await new Promise(r => setTimeout(r, 250))
+      const stillOpen = document.querySelector('.category-list, [class*="category-list"]')
+      if (!stillOpen) {
+        console.log('[SGC] Category modal closed successfully')
+        break
+      }
     }
 
-    if (confirmBtn) {
-      const isDisabled = confirmBtn.disabled ||
-        confirmBtn.hasAttribute('disabled') ||
-        confirmBtn.classList.contains('eds-button--disabled') ||
-        confirmBtn.getAttribute('disabled') === 'true'
-      if (isDisabled) {
-        console.warn('[SGC] Category confirm button is still disabled, clicking anyway...')
-      }
-
-      // 稍微延遲以防 Vue 3 未載入事件監聽器
-      await new Promise(r => setTimeout(r, 200))
-
-      confirmBtn.focus && confirmBtn.focus()
-      confirmBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }))
-      confirmBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }))
-      confirmBtn.click()
-      console.log('[SGC] Clicked category confirm button')
-    } else {
-      return { ok: false, error: '找不到類別確認按鈕' }
-    }
-
-    // 等待屬性與品牌欄位載入
-    const brandField = await waitForElement('[data-product-edit-field-unique-id="brandAndAttributes"]', 2000)
+    return { ok: true }
+  }
     if (!brandField) {
       console.warn('[SGC] Dynamic fields did not render in time, proceeding anyway')
     } else {
@@ -1156,7 +1157,7 @@
 
     // 先選取類別
     try {
-      const catResult = await fillCategoryAsync()
+      const catResult = await fillCategoryAsync(data)
       results.push({ field: '類別', ...catResult })
       // 如果類別有變更，等待 1000ms 讓 Vue DOM 重新渲染並穩定下來，防止後續填入的欄位值被清空
       if (catResult.ok && !catResult.alreadySelected) {
@@ -1184,6 +1185,8 @@
         field: '商品描述', ...(await fillFieldAsync(desc,
           () => findFieldByLabel('商品描述'),
           '[data-product-edit-field-unique-id="description"] .ql-editor',
+          '[data-product-edit-field-unique-id="description"] [contenteditable="true"]',
+          '[data-product-edit-field-unique-id="description"] .rich-text-editor',
           'textarea'
         ))
       })
@@ -1208,8 +1211,12 @@
     results.push({
       field: '商品數量', ...(await fillFieldAsync(stockVal,
         () => findFieldByLabel('商品數量'),
+        () => findFieldByLabel('數量'),
+        () => findFieldByLabel('庫存'),
         '[data-product-edit-field-unique-id="stock"] input.eds-input__input',
-        'input[placeholder*="數量"]'
+        '[data-product-edit-field-unique-id="stock"] input',
+        'input[placeholder*="數量"]',
+        'input[placeholder*="庫存"]'
       ))
     })
 
