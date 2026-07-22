@@ -1,6 +1,10 @@
 # seller.shopee.tw 新增商品頁面 DOM 結構分析
 
-蒐集時間：2026-07-19  
+> **2026-07-23 實測發現**：從 6865629（7/19）到 master（7/23）之間所有版本的 content.js 在「新增商品」頁全部失效（無法選類別、無法填欄位、無法設定分期）。
+> 即使回退到當時正常運作的 commit，仍全部失敗，極可能為 **Shopee 在這段時間內更改了頁面 DOM 結構**（可能是 Vue component 升級或 EDS 版本更新），尚未經實際 inspect 確認。
+> 以下分析基於 7/19 的 DOM 快照，實際 inspect 後需確認 selector 是否仍有效。
+
+蒐集時間：2026-07-19（首次）/ 2026-07-23（發現所有舊版 selector 失效，疑 DOM 已變更）
 頁面：`https://seller.shopee.tw/portal/product/new?from=sidebar`  
 已選類別：**電腦與周邊配件 > 軟體**
 
