@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   console.log('[SGC] content.js loaded, URL:', window.location.href)
   const SHOPEE_IMG_DOMAIN = 'down-tw.img.susercontent.com'
 
@@ -1573,10 +1573,13 @@
     // 點擊下一頁按鈕
     function clickNextPage() {
       for (const sel of [
-        ".eds-pagination__next button,.eds-pagination__next",
-        "[class*=\"pagination\"] [class*=\"next\"] button",
-        "button[class*=\"next\"],a[class*=\"next\"]",
-        "li.next a,li.next button,.ant-pagination-next"
+        '.eds-pager__button-next',
+        '[class*="pager"] [class*="next"]',
+        'button.eds-pager__button-next',
+        '.eds-pagination__next button,.eds-pagination__next',
+        '[class*="pagination"] [class*="next"] button',
+        'button[class*="next"],a[class*="next"]',
+        'li.next a,li.next button,.ant-pagination-next'
       ]) {
         const el = document.querySelector(sel)
         if (!el) continue

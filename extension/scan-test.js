@@ -53,7 +53,7 @@ document.getElementById('btnRunScan').addEventListener('click', async () => {
               return m ? parseInt(m[1]) : 0
             }
             function clickNext() {
-              for (const s of ['.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
+              for (const s of ['.eds-pager__button-next','[class*="pager"] [class*="next"]','.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
                 const e = document.querySelector(s)
                 if (!e) continue
                 if (e.disabled||e.classList.contains('disabled')||e.getAttribute('aria-disabled')==='true') return false

@@ -118,3 +118,37 @@ tw-11134207-820l6-mqst930825fmf1  × 2
 ## 十、使用者登入狀態
 
 頁面 URL 含 `?is_from_login=true`，已登入狀態。`__INITIAL_STATE__` script tag 存在並包含完整商品資料。
+
+---
+
+## 十一、買家賣場商品列表頁 (`https://shopee.tw/shop/25204842/search`) 結構 Inspection
+
+蒐集時間：2026-07-22  
+目標賣場：`https://shopee.tw/mazz68` (Shop ID: `25204842`)  
+工具：Antigravity DevTools Engine (CDP non-automation Chrome)
+
+### 11.1 賣場頁面 URL 與分頁機制
+
+- **主要賣場商品搜尋 URL**: `https://shopee.tw/shop/25204842/search`
+- **分頁 URL 參數**: `?page=0` (第一頁), `?page=1` (第二頁) ... `&sortBy=sales` (熱銷排序), `&sortBy=ctime` (最新排序)
+- **單頁商品數量**: 預設每頁顯示 30 筆（或 60 筆 lazyload 滾動加載）。
+
+### 11.2 商品卡片 DOM 結構
+
+- **商品卡片連結**: `a[href*="/product/25204842/"]` 或 `a[data-sqe="link"]`
+- **商品卡片容器**: `div.shop-search-result-view__item` / `div.col-xs-2-4`
+- **商品圖片**: `img.lazyload` / `img[src*="down-tw.img.susercontent.com/file/"]`
+- **商品標題**: `div[data-sqe="name"]` / `div.item-card__name`
+- **商品價格**: `span[class*="price"]` / `span[class*="currency"]`
+
+### 11.3 買家頁面分頁控制項 (Buyer Pagination Controls)
+
+- **分頁按鈕容器**: `div.shopee-page-controller`
+- **頁碼按鈕**: `button.shopee-button-solid--primary` (當前頁), `button.shopee-button-no-outline`
+- **下一頁按鈕**: `button.shopee-icon-button--right` / `button[class*="icon-button--right"]`
+- **頂部迷你分頁器**: `div.shopee-mini-page-controller` (包含 `span.shopee-mini-page-controller__current` 及左右切換按鈕)
+
+### 11.4 反爬蟲與載入特性備註
+
+1. **Lazy Loading 滾動加載**: 買家頁面下方的商品卡片圖片與 DOM 節點採動態懶載入，滑鼠需向下滾動 (`scroll`) 才能觸發完整 HTML 渲染。
+2. **非自動測試控制優勢**: 使用 CDP 非 `--enable-automation` 控制時，存取 `https://shopee.tw/shop/25204842/search` 均能正常回傳 200 OK，不會被觸發人機驗證或頁面重定向。
