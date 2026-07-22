@@ -1549,23 +1549,38 @@
     }
 
     // 從頁面文字讀取總數
+    // 從頁面 DOM 精確讀取總數（支援 .tab-badge 與 .list-header-title）
     function readTotal() {
-      const t = document.body?.textContent || ''
-      const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
+      const badge = document.querySelector(".tab-badge, [class*=\"tab-badge\"]")
+      if (badge) {
+        const bm = (badge.textContent || "").match(/(\d+)/)
+        if (bm) return parseInt(bm[1])
+      }
+      const title = document.querySelector(".list-header-title, [class*=\"list-header-title\"]")
+      if (title) {
+        const tm = (title.textContent || "").match(/(\d+)\s*件\s*商品/)
+        if (tm) return parseInt(tm[1])
+      }
+      const t = document.body?.textContent || ""
+      const m = t.match(/架上商品\s*\(\s*(\d+)\s*\)/)
+        || t.match(/(\d+)\s*件\s*商品/)
+        || t.match(/總計\s*(\d+)\s*項/)
+        || t.match(/共\s*(\d+)\s*筆/)
+        || t.match(/架上商品\((\d+)\)/)
       return m ? parseInt(m[1]) : 0
     }
 
     // 點擊下一頁按鈕
     function clickNextPage() {
       for (const sel of [
-        '.eds-pagination__next button,.eds-pagination__next',
-        '[class*="pagination"] [class*="next"] button',
-        'button[class*="next"],a[class*="next"]',
-        'li.next a,li.next button,.ant-pagination-next'
+        ".eds-pagination__next button,.eds-pagination__next",
+        "[class*=\"pagination\"] [class*=\"next\"] button",
+        "button[class*=\"next\"],a[class*=\"next\"]",
+        "li.next a,li.next button,.ant-pagination-next"
       ]) {
         const el = document.querySelector(sel)
         if (!el) continue
-        if (el.disabled||el.classList.contains('disabled')||el.getAttribute('aria-disabled')==='true') return false
+        if (el.disabled||el.classList.contains("disabled")||el.getAttribute("aria-disabled")==="true") return false
         el.click(); return true
       }
       return false
@@ -1573,7 +1588,7 @@
 
     // 等待商品表格重新渲染（Vue DOM 更新）
     function waitForRender(timeout) {
-      const tbl = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
+      const tbl = document.querySelector(".eds-table__body,table tbody,[class*=\"table__body\"]")||document.querySelector("table")
       if (!tbl) return new Promise(r => setTimeout(r, 2000))
       return new Promise(r => {
         let last = tbl.innerHTML
@@ -1589,85 +1604,93 @@
     collectFromDOM()
     let total = readTotal()
     let pages = Math.ceil(total / 12)
-    let curPage = parseInt(new URL(location.href).searchParams.get('page') || '1')
+    let curPage = parseInt(new URL(location.href).searchParams.get("page") || "1")
 
-    // 2. API attempt (Plan A) - supplement only, SPA pagination always runs after
-    //    Per 024 spec: if API returns partial data, Plan B (SPA) fills the rest.
-    const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ''
-    const realApiUrl = '/api/v3/opt/mpsku/list/v2/search_product_list'
-      + '?SPC_CDS=' + encodeURIComponent(cds)
-      + '&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false'
+    // 2. API attempt (Plan A) - page_size=48 (官方最高上限 48), supplement only, no early return
+    const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ""
+    const realApiUrl = "/api/v3/opt/mpsku/list/v2/search_product_list"
+      + "?SPC_CDS=" + encodeURIComponent(cds)
+      + "&SPC_CDS_VER=2&page_size=48&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false"
     try {
-      const res = await fetch(realApiUrl, { credentials: 'include' })
+      const res = await fetch(realApiUrl, { credentials: "include" })
       if (res.ok) {
         const json = await res.json()
         const list = json?.data?.products || []
         const beforeApi = items.length
         if (Array.isArray(list) && list.length > 0) {
           for (const p of list) {
-            const name = (p.name || '').trim()
+            const name = (p.name || "").trim()
             if (name && !nameSet.has(name)) {
               nameSet.add(name)
-              items.push({ name, productId: String(p.id||''), sku: p.parent_sku||'', url: '', price: p.price_detail?.price_min||'' })
+              items.push({ name, productId: String(p.id||""), sku: p.parent_sku||"", url: "", price: p.price_detail?.price_min||"" })
             }
           }
         }
-        console.log('[SGC] API ' + res.status + ': ' + list.length + ' items, ' + (items.length - beforeApi) + ' new')
+        console.log("[SGC] API " + res.status + ": " + list.length + " items, " + (items.length - beforeApi) + " new")
       } else {
-        console.log('[SGC] API HTTP ' + res.status + ', falling back to SPA pagination')
+        console.log("[SGC] API HTTP " + res.status + ", falling back to SPA pagination")
       }
-    } catch (e) { console.log('[SGC] API error: ' + e.message) }
+    } catch (e) { console.log("[SGC] API error: " + e.message) }
 
-    // 3. SPA click pagination (Plan B - confirmed working, per 024 spec)
-    //    Runs regardless of API outcome.
-    //    Old loop: while(curPage < pages && items.length < total)
-    //      Bug: if readTotal() returns 0 -> pages=0 -> loop never starts.
-    //    New approach: keep clicking next until button gone or no new items.
-    console.log('[SGC] SPA pagination start (' + items.length + ' collected so far)')
+    // 3. SPA click pagination (Plan B - confirmed working per 024 spec)
+    console.log("[SGC] SPA pagination start (" + items.length + " collected so far, total=" + total + ")")
     const MAX_PAGES = 50
     let pagesVisited = 0
     while (pagesVisited < MAX_PAGES) {
-      if (!clickNextPage()) { console.log('[SGC] No next-page button, SPA done'); break }
+      if (!clickNextPage()) { console.log("[SGC] No next-page button, SPA done"); break }
       await waitForRender()
       const prev = items.length
       collectFromDOM()
       pagesVisited++
-      curPage = parseInt(new URL(location.href).searchParams.get('page') || String(curPage + 1))
-      console.log('[SGC] SPA page ' + curPage + ': +' + (items.length - prev) + ' new, total=' + items.length)
-      if (items.length === prev) { console.log('[SGC] No new items this page, SPA done'); break }
+      curPage = parseInt(new URL(location.href).searchParams.get("page") || String(curPage + 1))
+      console.log("[SGC] SPA page " + curPage + ": +" + (items.length - prev) + " new, total=" + items.length)
+      if (items.length === prev) { console.log("[SGC] No new items this page, SPA done"); break }
       const t = readTotal()
-      if (t > 0 && items.length >= t) { console.log('[SGC] Reached total count, SPA done'); break }
+      if (t > 0 && items.length >= t) { console.log("[SGC] Reached total count " + t + ", SPA done"); break }
     }
 
     // 4. 備用：若 DOM 完全沒抓到，從表格列抓
     if (items.length === 0) {
-      const rows = document.querySelectorAll('.eds-table__row, [class*="table__row"]')
+      const rows = document.querySelectorAll(".eds-table__row, [class*=\"table__row\"]")
       for (const row of rows) {
-        const nameLink = row.querySelector('a[href*="/portal/product/"], [class*="name"], [class*="title"]')
+        const nameLink = row.querySelector("a[href*=\"/portal/product/\"], [class*=\"name\"], [class*=\"title\"]")
         if (!nameLink) continue
         const name = nameLink.textContent.trim()
-        if (!name || name === '新增商品' || name === '修改' || nameSet.has(name)) continue
+        if (!name || name === "新增商品" || name === "修改" || nameSet.has(name)) continue
         nameSet.add(name)
-        items.push({ name, productId: '', sku: '', url: '', price: '' })
+        items.push({ name, productId: "", sku: "", url: "", price: "" })
       }
     }
 
     return items
   }
 
-  // ── 從頁面 DOM 讀取分頁資訊（供 caller 決定是否需要額外翻頁） ──
+  // ── 從頁面 DOM 讀取分頁資訊 ──
   function readPageInfo() {
-    const bodyText = document.body?.textContent || ''
-    const totalMatch = bodyText.match(/總計\s*(\d+)\s*項/)
-      || bodyText.match(/共\s*(\d+)\s*筆/)
-      || bodyText.match(/全部\s*(\d+)/)
-      || bodyText.match(/(\d+)\s*件\s*商品/)
-      || bodyText.match(/架上商品\((\d+)\)/)
-    if (!totalMatch) return null
-    const totalCount = parseInt(totalMatch[1])
+    const badge = document.querySelector(".tab-badge, [class*=\"tab-badge\"]")
+    const title = document.querySelector(".list-header-title, [class*=\"list-header-title\"]")
+    const bodyText = document.body?.textContent || ""
+    let totalCount = 0
+    if (badge) {
+      const bm = (badge.textContent || "").match(/(\d+)/)
+      if (bm) totalCount = parseInt(bm[1])
+    }
+    if (!totalCount && title) {
+      const tm = (title.textContent || "").match(/(\d+)\s*件\s*商品/)
+      if (tm) totalCount = parseInt(tm[1])
+    }
+    if (!totalCount) {
+      const totalMatch = bodyText.match(/架上商品\s*\(\s*(\d+)\s*\)/)
+        || bodyText.match(/(\d+)\s*件\s*商品/)
+        || bodyText.match(/總計\s*(\d+)\s*項/)
+        || bodyText.match(/共\s*(\d+)\s*筆/)
+        || bodyText.match(/架上商品\((\d+)\)/)
+      if (totalMatch) totalCount = parseInt(totalMatch[1])
+    }
+    if (!totalCount) return null
     const pageSize = 12
     const totalPages = Math.ceil(totalCount / pageSize)
-    const currentPage = parseInt((window.location.href.match(/[?&]page=(\d+)/) || [])[1] || '1')
+    const currentPage = parseInt((window.location.href.match(/[?&]page=(\d+)/) || [])[1] || "1")
     return { totalCount, currentPage, totalPages, pageSize }
   }
 
