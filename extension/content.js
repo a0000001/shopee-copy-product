@@ -822,7 +822,7 @@
     console.log('[SGC] Clicked category selector')
 
     // 等待類別選擇彈窗載入
-    const modalList = await waitForElement('.category-list, [class*="category-list"], .category-dialog', 3000)
+    const modalList = await waitForElement('.category-list, [class*="category-list"], .category-dialog, .eds-modal, [class*="modal"]', 3000)
     if (!modalList) {
       return { ok: false, error: '類別選擇選單未顯示' }
     }
@@ -936,19 +936,15 @@
         console.log(`[SGC] Clicked category confirm button (attempt ${i + 1})`)
       }
       await new Promise(r => setTimeout(r, 250))
-      const stillOpen = document.querySelector('.category-list, [class*="category-list"]')
+      const stillOpen = document.querySelector(
+        '.eds-modal:not([style*="display: none"]), ' +
+        '[class*="modal"]:not([style*="display: none"]), ' +
+        '.category-list, [class*="category-list"]'
+      )
       if (!stillOpen) {
         console.log('[SGC] Category modal closed successfully')
         break
       }
-    }
-
-    return { ok: true }
-  }
-    if (!brandField) {
-      console.warn('[SGC] Dynamic fields did not render in time, proceeding anyway')
-    } else {
-      console.log('[SGC] Dynamic fields loaded')
     }
 
     return { ok: true }
