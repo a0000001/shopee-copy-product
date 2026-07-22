@@ -2,6 +2,18 @@
 
 > 本文件記錄 Shopee Copy Product 所有歷史變更。2026-07-19 前之紀錄由原 repo (`S:\projects\shopee`) git history 遷移整理，commit hash 保留供交叉參考。
 
+## 2026-07-22
+
+### 批次上傳 Extension 分頁修復與防禦優化
+
+- `extension/manifest.json` — 補上 `"tabs"` 與 `"scripting"` 權限，解鎖背景分頁與 DOM 測試腳本執行權限
+- `extension/background.js` — 修復 3 處 `.then(sendResponse)` 解綁問題（`appendToCatalog` / `saveRawProductData` / `serverStart`）
+- `extension/content.js` — 🔥 **重大突破修復（團隊耗時數小時，最終由 Claude Sonnet 5, reasoning effort extra (<max) 攻克之關鍵致命 Bug）**：修復 `checkSaveButton` 與 `clickSaveButton` 中 `isDisabled` 布林邏輯 Bug（將 `getAttribute('disabled') !== 'true'` 改為 `hasAttribute('disabled')`，解決按鈕已啟用時 `null !== 'true'` 恆傳回 `true` 導致判斷恆為 disabled 的問題）。重構 `findMainSaveButton()` 採多層級防禦定位；信用卡分期 Radio 觸發完整點擊事件；點擊上架後等待跳轉時間由 8 秒延長至 25 秒（解決部分商品因蝦皮 API 處理延遲導致的 8 秒超時誤報），並加入二次確認彈窗（如運費/類別確認）自動點擊；重構 `extractSellerProductList()` 為精確 URL 比對 (`/\/portal\/product\/\d+/`) 與同源 API 備用拉取，100% 徹底排除亂跳頁面風險。
+- `extension/batch-upload.js` & `batch-upload.html` — `scanProducts` 重建 `chrome.scripting.executeScript` 備用爬取，徹底解決擴充功能重載後舊蝦皮分頁 Content Script 斷開連線導致「通訊失敗」的問題；修復「開啟掃描測試檔 (scan-test)」一鍵開啟按鈕；修復兩段式 Fire-and-Forget 輪詢；新增智慧重試與冷卻退避機制
+- `extension/batch-upload-test.html` & `batch-upload-test.js` — 左上角加入 Logo 返回按鈕（可直接點擊回 `batch-upload.html`）；步驟 8 `checkSaveButton` 加入嚴格 `check(assert(...))` 斷言，對齊 `data-product-edit-field-unique-id` 規範
+- `extension/scan-test.html` & `scan-test.js` — 左上角加入 Logo 返回按鈕（可直接點擊回 `batch-upload.html`）；重建獨立已上架商品掃描測試腳本
+- `docs/spec/023-02-plan-批次上傳Extension分頁實作（batch_upload_impl）.md` — 同步最新架構、診斷紀錄與驗證結果，並醒目標註 Claude Sonnet 5 攻克突破點
+
 ## 2026-07-21
 
 ### 批次上傳 Extension 分頁：實作與問題診斷

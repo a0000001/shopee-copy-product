@@ -51,15 +51,16 @@
   <h1>📦 批次上傳至蝦皮</h1>
 
   <div id="step1" class="step">
-    <h3>步驟 1：選擇商品目錄</h3>
-    <input type="file" id="fileInput" accept=".json">
-    <div id="fileInfo" class="step-info" style="display:none"></div>
+    <h3>步驟 1：掃描已上架商品</h3>
+    <button id="btnScan" class="btn-primary">掃描已上架商品</button>
+    <button id="btnTestScan" class="btn-secondary" style="margin-left: 10px; background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">🧪 測試已上架商品掃描 (scan-test.html)</button>
+    <div id="scanInfo" class="step-info" style="display:none"></div>
   </div>
 
   <div id="step2" class="step" style="display:none">
-    <h3>步驟 2：掃描已上架商品</h3>
-    <button id="btnScan" class="btn-primary">掃描已上架商品</button>
-    <div id="scanInfo" class="step-info" style="display:none"></div>
+    <h3>步驟 2：選擇商品目錄 JSON 檔案</h3>
+    <input type="file" id="fileInput" accept=".json">
+    <div id="fileInfo" class="step-info" style="display:none"></div>
   </div>
 
   <div id="step3" class="step" style="display:none">
@@ -74,7 +75,7 @@
     <div id="logContainer" class="log"></div>
     <div class="btn-row">
       <button id="btnStart" class="btn-primary">開始上傳</button>
-      <button id="btnStop" class="btn-secondary" style="display:none">暫停</button>
+      <button id="btnStop" class="btn-secondary" style="display:none">中斷</button>
     </div>
   </div>
 

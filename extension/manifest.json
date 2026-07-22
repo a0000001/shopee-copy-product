@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "一鍵擷取蝦皮商品標題、價格、描述，下載圖片(JPG)與影片",
   "permissions": [
+    "tabs",
     "activeTab",
+    "scripting",
     "clipboardWrite",
     "clipboardRead",
     "contextMenus",

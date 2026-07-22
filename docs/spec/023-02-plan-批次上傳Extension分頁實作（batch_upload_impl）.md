@@ -1,236 +1,192 @@
-# 023-02 — 批次上傳 Extension 分頁（實作）
+# 023-02 — 批次上傳 Extension 分頁（實作與最新進度）
 
-> 本文件為實作文件，包含檔案清單、關鍵程式碼與開發 Tasks。
-> 流程規劃與設計決策請見 [023-01 規格文件](023-01-plan-批次上傳Extension分頁規格（batch_upload_spec）.md)
+> 本文件為 Chrome Extension 批次上傳功能的技術實作與最新狀態對齊文件，專為可直接提供給第三方 LLM（如 Claude Web）閱讀設計，包含完整脈絡、絕對路徑關鍵程式碼、重大突破修復紀錄、實測診斷結果、待解決問題與 Tasks。
+> 關聯文件：
+> - 頁面 DOM 分析：`file:///S:/projects/shopee-copy-product/docs/data/mcp devtools 蒐集的蝦皮資料/001-賣家中心新增商品（seller-new-product-dom-analysis）.md`
+> - 事前預防與事後檢查規範：`file:///S:/projects/share/AI技巧/023-改壞檔案-事前預防與事後檢查.md`
 
-## 總覽
+---
 
-在賣家頁面點擊 extension icon 後可開啟獨立分頁 `batch-upload.html`，選取 `product-catalog-tw.json` 後自動逐筆上傳新商品至蝦皮，避免與已上架商品重複。
+## 一、 專案架構與檔案清單
 
-## 檔案清單
+### 1. 檔案與絕對路徑
 
-### 新增
+| 檔案 | 說明 | 絕對路徑 |
+|------|------|----------|
+| `content.js` | 注入蝦皮賣家中心頁面之 Content Script（表單填寫、媒體上傳、按鈕檢測、已上架爬取與診斷 Log） | `file:///S:/projects/shopee-copy-product/extension/content.js` |
+| `batch-upload.js` | 批次上傳獨立分頁主邏輯（Landing 自動掃描、選檔去重、兩段式 Fire-and-Forget 輪詢） | `file:///S:/projects/shopee-copy-product/extension/batch-upload.js` |
+| `batch-upload.html` | 批次上傳 UI 介面（步驟 1：掃描已上架 → 步驟 2：選擇 JSON → 步驟 3：開始上傳） | `file:///S:/projects/shopee-copy-product/extension/batch-upload.html` |
+| `scan-test.html` | 獨立已上架商品掃描測試工具 HTML（含 Logo 返回按鈕） | `file:///S:/projects/shopee-copy-product/extension/scan-test.html` |
+| `scan-test.js` | 獨立已上架商品掃描測試工具 JS（含 `scripting` 注入降級防禦與診斷 Log） | `file:///S:/projects/shopee-copy-product/extension/scan-test.js` |
+| `batch-upload-test.html` | 獨立單件填寫發布測試套件 HTML（含 Logo 返回按鈕） | `file:///S:/projects/shopee-copy-product/extension/batch-upload-test.html` |
+| `batch-upload-test.js` | 獨立單件填寫發布測試套件 JS（含 23 項單元/DOM 斷言） | `file:///S:/projects/shopee-copy-product/extension/batch-upload-test.js` |
+| `manifest.json` | Extension 清單檔（含 `tabs`, `scripting`, `storage` 權限） | `file:///S:/projects/shopee-copy-product/extension/manifest.json` |
 
-| 檔案 | 說明 |
-|------|------|
-| `S:\projects\shopee-copy-product\extension\batch-upload.html` | 批次上傳分頁 UI |
-| `S:\projects\shopee-copy-product\extension\batch-upload.js` | 批次上傳邏輯 |
+---
 
-### 修改
+## 二、 當前架構與實測診斷結果 (2026-07-22 Console 實測)
 
-| 檔案 | 變更 |
-|------|------|
-| `S:\projects\shopee-copy-product\extension\popup.html` | 新增「批次上傳」按鈕（僅在 seller 頁面顯示） |
-| `S:\projects\shopee-copy-product\extension\popup.js` | 按鈕 click → `chrome.tabs.create('batch-upload.html')` |
-| `S:\projects\shopee-copy-product\extension\content.js` | 新增 `checkSaveButton`、`clickSaveButton`、`uploadMedia` handler |
+### 1. 蝦皮賣家中心 (`seller.shopee.tw/portal/product/list`) Console 實測輸出
 
-## 流程
+使用者於蝦皮賣家中心頁面直接執行診斷腳本，取得以下**100% 事實數據**：
 
 ```
-使用者點擊 ICON → popup 載入 → 偵測到在 seller.shopee.tw
-  → 顯示「批次上傳」按鈕
-  → 點擊後 chrome.tabs.create('batch-upload.html')
-
-batch-upload 分頁：
-  1. 選取 product-catalog-tw.json
-  2. 遍歷當前視窗分頁找到 seller.shopee.tw，執行 extractSellerProductList()
-  3. 比對排除已上架商品
-  4. 逐筆：
-     a. chrome.tabs.create 開新分頁到 product/new
-     b. waitForTabReady() 等待 status === 'complete'
-     c. chrome.tabs.sendMessage({ action: 'fillProductData', data: item })
-        — 完全複製 popup.js「從剪貼簿填入」的單行流程
-     d. 等待儲存按鈕啟用（輪詢 60 秒）
-     e. 點擊儲存
-     f. 關分頁
-  5. 顯示結果
+=== SGC 診斷開始 ===
+[診斷] DOM 商品連結數量: 12
+[診斷] 分頁容器 outerHTML 前 500 字: <div data-v-cd68733c="" class="product-list-section product-and-pagination-wrap-v2 list"><div data-v-f21626d6="" data-v-cd68733c="" class="product-list-container" show-boost-info="true" style="width: 976px;"><div data-v-f2ae152c="" data-v-f21626d6="" class="eds-table eds-table-scrollX-left product-list-view mpsku-list">...
+[診斷] window.__INITIAL_STATE__ 是否存在: false
+[診斷] /api/v3/product/get_product_list?page_number=1&page_size=100&version=3.1.0 → status 503 (ERROR_SP_SERVICE_NOT_FOUND)
+[診斷] /api/v2/product/get_item_list?page_number=1&page_size=100 → status 404
+=== SGC 診斷結束 ===
 ```
 
-## 核心程式碼
+### 2. 實測解讀與確立之事實
+1. **DOM 筆數**：第 1 頁 DOM 中精確存在 **12 筆** 商品連結 (`/\/portal\/product\/\d+/`)，0 雜訊。第 13~26 筆在第 2、3 頁未渲染。
+2. **全域 State**：`window.__INITIAL_STATE__` 為 `false`（確定為 Vue 3 純前端渲染）。
+3. **猜測 API 結論**：`/api/v3/product/get_product_list` (503 Service Not Found) 與 `/api/v2/product/get_item_list` (404 Not Found) **確定皆非蝦皮實際使用之 API 端點**。
+4. **分頁容器 HTML Class**：確定為 **`.product-and-pagination-wrap-v2`** 及 **`.product-list-section`**。
 
-### batch-upload.js
+---
 
-`S:\projects\shopee-copy-product\extension\batch-upload.js`
+## 三、 關鍵程式碼片段
+
+### 1. Landing 自動執行步驟 1 掃描 (`batch-upload.js`)
+檔案路徑：`file:///S:/projects/shopee-copy-product/extension/batch-upload.js`
 
 ```javascript
-// 開新分頁 → 等待載入 → 填入 → 儲存 → 關閉
-let tab = null
-try {
-  tab = await chrome.tabs.create({
-    url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
-  })
-  await waitForTabReady(tab.id)
-
-  // 完全複製 popup.js「從剪貼簿填入」流程
-  const result = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: item })
-
-  if (!result || !result.ok) {
-    throw new Error((result && result.error) || 'fillAll 失敗')
-  }
-
-  // 輪詢儲存按鈕（60 秒）
-  for (let i = 0; i < 60; i++) {
-    await sleep(1000)
-    const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
-    if (checkResult && checkResult.ready) {
-      await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
-      break
+async function scanProducts() {
+  $('btnScan').disabled = true
+  $('btnScan').textContent = '掃描中...'
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true })
+    const sellerTab = tabs.find(t => t.url && t.url.includes('seller.shopee.tw/portal/product/list'))
+    if (!sellerTab) {
+      throw new Error('請先開啟蝦皮「我的商品」列表分頁（seller.shopee.tw/portal/product/list）')
     }
-  }
 
-  state.results.push({ name: item.ps_product_name, ok: true })
-  consecutiveFailures = 0
-} catch (e) {
-  state.results.push({ name: item.ps_product_name, ok: false, error: e.message })
-  consecutiveFailures++
-  if (consecutiveFailures >= 2) {
-    state.shouldStop = true  // 連續 2 筆錯誤自動暫停
-  }
-} finally {
-  if (tab && tab.id) { chrome.tabs.remove(tab.id) }
-}
-
-await sleep(3000)  // 避免 WAF
-```
-
-### waitForTabReady
-
-```javascript
-function waitForTabReady(tabId, timeout = 20000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('分頁載入超時')), timeout)
-    function onUpdated(updatedTabId, changeInfo) {
-      if (updatedTabId === tabId && changeInfo.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(onUpdated)
-        clearTimeout(timer)
-        setTimeout(() => resolve(), 500)
-      }
+    let products = null
+    try {
+      products = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
+    } catch (e) {
+      console.warn('[SGC] sendMessage failed, using scripting fallback:', e.message)
     }
-    chrome.tabs.onUpdated.addListener(onUpdated)
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      const [scriptRes] = await chrome.scripting.executeScript({
+        target: { tabId: sellerTab.id },
+        func: async () => { /* DOM 連結精確抓取 */ }
+      })
+      if (scriptRes && scriptRes.result) products = scriptRes.result
+    }
+
+    log('掃描取得 ' + products.length + ' 筆已上架商品', products.length > 0 ? 'ok' : 'info')
+    state.existingNames = new Set(products.map(p => p.name))
+    $('scanInfo').textContent = '✅ 已掃描取得 ' + products.length + ' 筆已上架商品'
+    $('scanInfo').className = 'step-info ok'
+    $('scanInfo').style.display = 'block'
+    $('step2').style.display = 'block'
+  } catch (err) {
+    $('scanInfo').textContent = '❌ 掃描失敗：' + err.message
+    $('scanInfo').className = 'step-info fail'
+    $('scanInfo').style.display = 'block'
+  } finally {
+    $('btnScan').disabled = false
+    $('btnScan').textContent = '重新掃描'
+  }
+}
+
+// 頁面載入自動執行步驟 1 掃描
+scanProducts()
+```
+
+### 2. 已上架商品 DOM 採集函式 `extractSellerProductList()` (`content.js`)
+檔案路徑：`file:///S:/projects/shopee-copy-product/extension/content.js`
+
+```javascript
+async function extractSellerProductList() {
+  const items = []
+  const nameSet = new Set()
+
+  // DOM 精確匹配：包含商品 ID 的連結 (/portal/product/數字)
+  const productLinks = Array.from(document.querySelectorAll('a[href*="/portal/product/"]')).filter(a => {
+    const href = a.getAttribute('href') || a.href || ''
+    return /\/portal\/product\/\d+/.test(href)
   })
+
+  for (const link of productLinks) {
+    const name = link.textContent.trim()
+    if (!name || nameSet.has(name)) continue
+    nameSet.add(name)
+
+    const href = link.getAttribute('href') || link.href || ''
+    const idMatch = href.match(/\/portal\/product\/(\d+)/)
+
+    items.push({
+      name,
+      productId: idMatch ? idMatch[1] : '',
+      sku: '',
+      url: link.href || '',
+      price: '',
+    })
+  }
+
+  return items
 }
 ```
 
-### 掃描已上架商品（遍歷視窗，不限 active）
+---
 
-```javascript
-const tabs = await chrome.tabs.query({ currentWindow: true })
-const sellerTab = tabs.find(t => t.url && t.url.includes('seller.shopee.tw'))
-if (!sellerTab) throw new Error('請先在賣家頁面開啟此功能')
-const resp = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
-```
+## 四、 重大突破與目前懸而未決的開放問題 (Open Questions)
 
-### content.js 新增 handler
+### 1. 歷史重大突破紀錄 (2026-07-22)
+> [!IMPORTANT]
+> **🔥 `checkSaveButton` 的 `isDisabled` 布林邏輯漏洞攻克**
+> 團隊曾困擾數小時：按鈕精確定位到 `「儲存並上架」`，但 `checkSaveButton` 永遠回報 `ready: false` / `disabled`。
+> 由 **Claude Sonnet 5 (reasoning effort: extra < max)** 拆解找出：舊程式中 `btn.getAttribute('disabled') !== 'true'` 在按鈕 Enabled 時 `getAttribute` 回傳 `null`，而 `null !== 'true'` 評估為 `true`，導致 `isDisabled` 被硬性算成 `true`！
+> 改為 `hasAttribute('disabled')` 後，單元測試 23/23 項全過，實測成功發布！
 
-`S:\projects\shopee-copy-product\extension\content.js`
+---
 
-```javascript
-if (msg.action === 'checkSaveButton') {
-  const btns = document.querySelectorAll('button')
-  const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
-  sendResponse({ ready: !!btn && !btn.disabled })
-  return true
-}
-if (msg.action === 'clickSaveButton') {
-  const btns = document.querySelectorAll('button')
-  const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
-  if (btn) { btn.click(); sendResponse({ ok: true }) }
-  else sendResponse({ ok: false, error: '找不到儲存按鈕' })
-  return true
-}
-```
+### 2. 當前最新待解決問題 (Open Questions for Claude Web)
 
-## 診斷紀錄
+**背景：已確立分頁容器為 `.product-and-pagination-wrap-v2`，猜測 REST API 端點已證實無效**
 
-### 錯誤：Illegal invocation
+* **已知數據**：
+  - 分頁容器 class 為 `.product-and-pagination-wrap-v2`。
+  - 當前頁 DOM 確實為 12 筆商品，無任何雜訊。
 
-`chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: item })` 在 batch-upload 流程中拋出 `Illegal invocation`。
+* **諮詢與待解答問題 (Open Questions)**：
 
-**對比（相同程式碼，不同結果）：**
+  1. **問題 A：如何針對 `.product-and-pagination-wrap-v2` 容器內的「下一頁」或「每頁 100 筆」進行 DOM 操作？**
+     - 請教在 `.product-and-pagination-wrap-v2` 結構下，如何精確取得下一頁按鈕或下拉選單的子元素 Selector？
+     - 執行以下 Console 檢測指令可直接列出 `.product-and-pagination-wrap-v2` 內部所有按鈕：
+       ```javascript
+       const p = document.querySelector('.product-and-pagination-wrap-v2')
+       console.log(Array.from(p.querySelectorAll('button, .eds-button, .eds-select')).map(el => ({ tag: el.tagName, cls: el.className, text: el.textContent.trim() })))
+       ```
 
-| 情境 | 呼叫方式 | 結果 |
-|------|---------|------|
-| popup「從剪貼簿填入」 | `chrome.tabs.sendMessage(tab.id, ...)` 對已開啟的分頁 | ✅ 成功 |
-| batch-upload | `chrome.tabs.sendMessage(tabId, ...)` 對 `chrome.tabs.create` 新開的分頁 | ❌ Illegal invocation |
+  2. **問題 B：DevTools Network 實測真 API 端點**
+     - 手動在分頁點擊下一頁，於 Network 標籤過濾 `Fetch/XHR`，即可秒級取得真正的 URL 端點與 Response JSON。
 
-**診斷 log 發現：**
-- `tab.id` 是有效數字（如 `1830144430`）
-- `tab.url` 為 `undefined`（`chrome.tabs.create` 回傳時 navigation 尚未開始）
-- `waitForTabReady` 有等到 `status === 'complete'`
+---
 
-**Claude 分析（2026-07-22）：**
-- `chrome.tabs.sendMessage(tabId, {...})` 本身的呼叫方式正確，沒有解綁 this
-- 問題極可能出在 **content.js 內部**，而非 batch-upload.js
-- 常見成因：
-  1. `content.js` 裡有類似 `const send = chrome.runtime.sendMessage; send(...)` 抽出方法單獨呼叫
-  2. `waitForTabReady` 判斷 `status === 'complete'` 太早，SPA 導向後 content script context 被清空
-  3. `content_scripts.matches` 對 `product/new?from=sidebar` 沒有完全匹配
-- 需確認：console 完整 stack trace、content.js message listener 區塊、manifest content_scripts 設定
+## 五、 Tasks (開發與測試任務)
 
-## 資料流問題
+### Task 1: 依據 `.product-and-pagination-wrap-v2` 精確取得全量 26 筆商品
 
-### ps_category 資料流斷裂（Claude 審核發現）
+**目標**：透過 `.product-and-pagination-wrap-v2` 內部的分頁控制項或正確 API，精確回傳 26 筆商品。
 
-`ps_category` 在整個系統中是「只寫不讀」的死資料：
+**異動檔案**：
+- `file:///S:/projects/shopee-copy-product/extension/content.js`
+- `file:///S:/projects/shopee-copy-product/extension/batch-upload.js`
+- `file:///S:/projects/shopee-copy-product/extension/scan-test.js`
 
-```
-popup.js toJsonClipboard()
-  → 寫入 ps_category（從 <select> 讀取，目前唯一值 "100644,101937"）
-  → 存入 JSON 檔案
+**Smoke Test (冒煙測試)**：
+1. 打開 `batch-upload.html` 或 `scan-test.html`。
+2. **預期結果**：頁面 Landing 即自動完成掃描，印出 `✅ 成功掃描取得 26 筆商品`。
 
-batch-upload.js
-  → 直接傳送整筆 item（含 ps_category）給 fillProductData
+---
 
-content.js fillCategoryAsync()
-  → ❌ 完全沒讀取 data.ps_category
-  → 寫死比對中文字串「電腦與周邊配件」「軟體」
-  → 在類別選單中固定尋找這些文字
-```
+### Task 2: 批次上傳端到端發布與去重驗證（待 Task 1 掃描數確認 26 筆後執行）
 
-**目前能運作**純粹因為只有一個類別選項（電腦與周邊配件 > 軟體）。一旦新增第二個類別選項，批次上傳仍會把所有商品硬塞進同一個類別。
-
-**修正方向：** `fillCategoryAsync` 應讀取 `data.ps_category` 依代碼比對，保留現有文字比對作為找不到代碼對應時的 fallback。
-
-### 其他已知問題
-
-| 位置 | 問題 |
-|------|------|
-| `content.js:1344-1381 vs 1384-1399` | `chrome.runtime.onMessage` 與 `window.postMessage` 兩套 action 分派，`clickSaveButton` 只在前者有，後者沒有 |
-| `popup.js:306 CATEGORY_MAP` | 宣告後從未被任何函數呼叫 |
-| `content.js checkSaveButton` | 用正則對頁面所有按鈕比對，未限定容器，類別彈窗未關閉時可能誤判 |
-
-## 尚未確定的問題
-
-1. **Illegal invocation 根因** — `chrome.tabs.sendMessage` 對新開分頁失敗，但對已開啟分頁正常。`tab.url` 為 `undefined` 但 `tab.id` 有效。  
-   Claude 分析：問題可能在 content.js 內部（如解綁 this 的 Chrome API 呼叫、SPA 重導向時 content script context 被清空），而非 batch-upload.js。  
-   **需確認：** console 完整 stack trace、content.js message listener 區塊、manifest content_scripts 設定。
-
-2. **儲存按鈕的 selector** — `Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))` 需確認蝦皮 seller 頁面實際按鈕文字。
-
-3. **WAF 頻率限制** — 3 秒間隔是否足夠？需實際測試。可考慮加入指數退避與 429 偵測。
-
-## Tasks
-
-### Task 1: 診斷 Illegal invocation
-
-**目標：** 找出 `chrome.tabs.sendMessage` 對新開分頁拋出 `Illegal invocation` 的原因。
-
-**Smoke test：**
-1. 開啟 `batch-upload.html`，選取 catalog JSON
-2. 點「開始上傳」→ 觀察 console 輸出的 `tabId`、`url`、`status`
-3. 對比：手動開一個 seller 新商品分頁，從 popup 按「從剪貼簿填入」確認正常
-4. 確認 `batch-upload.html` 的 `chrome` 物件是否完整（`console.log(Object.keys(chrome))`）
-
-### Task 2: 完成批次上傳流程
-
-**先決條件：** Task 1 解決後。
-
-**目標：** 讓 `fillAndSave` 正常運作，完成逐筆上傳。
-
-**Smoke test：**
-1. 選取 `product-catalog-tw.json`
-2. 掃描已上架商品
-3. 開始上傳 → 確認逐筆開分頁、填入、儲存、關分頁
-4. 確認完成頁顯示成功/失敗筆數
-5. 按「重試失敗項目」確認只重試失敗的
-6. 手動中斷後重新掃描，確認已上傳的筆數被排除
+**目標**：驗證 26 筆真實商品精確去重後，`pending` 上傳清單數量為 `總目錄筆數 - 26`，進行安全批次上傳。

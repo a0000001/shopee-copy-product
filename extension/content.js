@@ -165,7 +165,7 @@
       const t = el.textContent.trim()
       return (t === '商品描述' || t === '商品詳情') && el.children.length === 0
     })
-    
+
     if (descHeaders.length > 0) {
       const header = descHeaders[0]
       let contentEl = header.nextElementSibling
@@ -267,7 +267,7 @@
     }
 
     const seen = new Set()
-    
+
     // 1. 先處理輪播圖與縮圖容器 (mdCA_C, uRJsr5, carousel, gallery)
     const galleryItems = document.querySelectorAll(
       '[class*="mdCA_C"] img, [class*="mdCA_C"] source, ' +
@@ -275,7 +275,7 @@
       '[class*="carousel"] img, [class*="carousel"] source, ' +
       '[class*="gallery"] img, [class*="gallery"] source'
     )
-    
+
     galleryItems.forEach(el => {
       const attrs = ['src', 'data-src', 'srcset', 'data-srcset']
       attrs.forEach(attr => {
@@ -306,7 +306,7 @@
         urls.forEach(url => {
           const base = normalizeImageUrl(url)
           if (!base) return
-          
+
           const lower = base.toLowerCase()
           if (lower.includes('susercontent.com') || lower.includes('shopeemobile.com') || lower.includes('down-tw.img')) {
             const w = parseInt(el.getAttribute('width')) || el.naturalWidth || el.width || 0
@@ -357,7 +357,7 @@
           r.images = imgs.filter(Boolean)
           if (r.images.length) return r
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return null
   }
@@ -408,9 +408,9 @@
         return val
       }
       const apiAllImgs = []
-      ;[item.images, item.image_list, item.img_list, item.album].forEach(arr => {
-        if (Array.isArray(arr)) arr.forEach(img => { const u = resolveApiImgUrl(img); if (u) apiAllImgs.push(u) })
-      })
+        ;[item.images, item.image_list, item.img_list, item.album].forEach(arr => {
+          if (Array.isArray(arr)) arr.forEach(img => { const u = resolveApiImgUrl(img); if (u) apiAllImgs.push(u) })
+        })
       if (Array.isArray(item.models)) {
         item.models.forEach(m => { const u = resolveApiImgUrl(m.image || m.image_id || ''); if (u) apiAllImgs.push(u) })
       }
@@ -541,14 +541,14 @@
             const initData = JSON.parse(jsonStr)
             const shop = initData?.productDetail?.shop || initData?.shop || {}
             data.shop_name = shop?.account?.username || shop?.username || ''
-          } catch {}
+          } catch { }
           break
         }
       }
     }
 
     // ── 儲存原始資料到本地（fire-and-forget，不影響回傳） ──
-    chrome.runtime.sendMessage({ action: 'saveRawProductData', data: data }).catch(() => {})
+    chrome.runtime.sendMessage({ action: 'saveRawProductData', data: data }).catch(() => { })
 
     return data
   }
@@ -640,7 +640,7 @@
     }
     const cleanLabel = labelText.trim().replace(/[\s*]+/g, '')
     const fieldId = Object.entries(fieldIdMap).find(([k]) => cleanLabel.includes(k) || k.includes(cleanLabel))?.[1]
-    
+
     if (fieldId) {
       const el = document.querySelector(`[data-product-edit-field-unique-id="${fieldId}"] input.eds-input__input, [data-product-edit-field-unique-id="${fieldId}"] textarea.eds-input__input, [data-product-edit-field-unique-id="${fieldId}"] .ql-editor`)
       if (el) return el
@@ -701,19 +701,19 @@
       container = brandContainer || document.querySelector('.product-brand-item .eds-select, .attribute-select-item .eds-select')
     }
     if (!container) return { ok: false, error: '找不到品牌欄位容器' }
-    
+
     const selector = container.querySelector('.eds-selector')
     if (!selector) return { ok: false, error: '找不到品牌下拉觸發器' }
-    
+
     selector.focus()
     selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     selector.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
     selector.click()
     console.log('[SGC] Clicked brand selector')
-    
+
     const menu = await waitForElement('.eds-select__menu, .eds-dropdown-menu, .eds-select-popover', 1500)
     if (!menu) return { ok: false, error: '下拉選單未顯示' }
-    
+
     // 輪詢等待選項渲染（最多等 3 秒），因為品牌選項可能是非同步載入
     let options = []
     for (let i = 0; i < 30; i++) {
@@ -735,18 +735,18 @@
       await new Promise(r => setTimeout(r, 100))
     }
     console.log(`[SGC] Found ${options.length} brand options`)
-    
+
     const target = options.find(opt => {
       const txt = (opt.textContent || '').trim().toLowerCase()
-      return txt === brandName.toLowerCase() || 
-             txt === 'nobrand' || 
-             txt === '無品牌' ||
-             txt.includes(brandName.toLowerCase()) ||
-             txt.includes('自有') ||
-             txt.includes('其他品牌') ||
-             txt.includes('nobrand')
+      return txt === brandName.toLowerCase() ||
+        txt === 'nobrand' ||
+        txt === '無品牌' ||
+        txt.includes(brandName.toLowerCase()) ||
+        txt.includes('自有') ||
+        txt.includes('其他品牌') ||
+        txt.includes('nobrand')
     })
-    
+
     if (target) {
       if (target.focus) target.focus()
       target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
@@ -755,7 +755,7 @@
       console.log('[SGC] Clicked brand option:', target.textContent.trim())
       return { ok: true }
     }
-    
+
     if (options.length > 0) {
       const fallbackOpt = options[0]
       if (fallbackOpt.focus) fallbackOpt.focus()
@@ -765,7 +765,7 @@
       console.log('[SGC] Fallback: Clicked first brand option:', fallbackOpt.textContent.trim())
       return { ok: true }
     }
-    
+
     return { ok: false, error: `找不到品牌選項：${brandName}` }
   }
 
@@ -800,10 +800,10 @@
     // 遍歷所有層級，直到無新欄位產生
     let colIdx = 0
     const maxLevels = 5 // 安全上限，避免無窮迴圈
-    
+
     while (colIdx < maxLevels) {
       console.log(`[SGC] Processing category column ${colIdx}`)
-      
+
       // 等待該欄位出現 (第 0 欄直接取得，後續欄位等待渲染)
       let col = null
       if (colIdx === 0) {
@@ -819,19 +819,19 @@
           await new Promise(r => setTimeout(r, 50))
         }
       }
-      
+
       if (!col) {
         console.log(`[SGC] Column ${colIdx} did not appear, assuming leaf reached.`)
         break
       }
-      
+
       // 在此欄中選擇適當的項目
       const items = col.querySelectorAll('.category-item')
       if (items.length === 0) {
         console.log(`[SGC] Column ${colIdx} has no items.`)
         break
       }
-      
+
       let targetItem = null
       if (colIdx === 0) {
         // 第一級：尋找「電腦與周邊配件」
@@ -846,7 +846,7 @@
           return text === '其他' || text.includes('其他') || text.toLowerCase().includes('other')
         })
       }
-      
+
       // 如果沒找到，預設選擇第一個選項
       if (!targetItem) {
         targetItem = items[0]
@@ -854,13 +854,13 @@
       } else {
         console.log(`[SGC] Found target in column ${colIdx}:`, targetItem.textContent.trim())
       }
-      
+
       // 點擊選取
       targetItem.scrollIntoView && targetItem.scrollIntoView({ block: 'nearest' })
       targetItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
       targetItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
       targetItem.click()
-      
+
       // 等待 200ms 以讓子級選單有時間觸發載入
       await new Promise(r => setTimeout(r, 200))
       colIdx++
@@ -871,7 +871,7 @@
       const categoryModal = Array.from(document.querySelectorAll(
         '.eds-modal, .category-dialog, .product-category-selector-modal, div[role="dialog"], .category-dialog-footer'
       )).find(m => m.querySelector('.category-list') || m.querySelector('.category-item'))
-      
+
       if (!categoryModal) {
         console.log('[SGC] Category modal container not found')
         return null
@@ -909,10 +909,10 @@
     for (let i = 0; i < 30; i++) {
       confirmBtn = findCategoryConfirmButton()
       if (confirmBtn) {
-        const isDisabled = confirmBtn.disabled || 
-                           confirmBtn.hasAttribute('disabled') || 
-                           confirmBtn.classList.contains('eds-button--disabled') ||
-                           confirmBtn.getAttribute('disabled') === 'true'
+        const isDisabled = confirmBtn.disabled ||
+          confirmBtn.hasAttribute('disabled') ||
+          confirmBtn.classList.contains('eds-button--disabled') ||
+          confirmBtn.getAttribute('disabled') === 'true'
         if (!isDisabled) {
           console.log('[SGC] Category confirm button is enabled!')
           break
@@ -922,17 +922,17 @@
     }
 
     if (confirmBtn) {
-      const isDisabled = confirmBtn.disabled || 
-                         confirmBtn.hasAttribute('disabled') || 
-                         confirmBtn.classList.contains('eds-button--disabled') ||
-                         confirmBtn.getAttribute('disabled') === 'true'
+      const isDisabled = confirmBtn.disabled ||
+        confirmBtn.hasAttribute('disabled') ||
+        confirmBtn.classList.contains('eds-button--disabled') ||
+        confirmBtn.getAttribute('disabled') === 'true'
       if (isDisabled) {
         console.warn('[SGC] Category confirm button is still disabled, clicking anyway...')
       }
-      
+
       // 稍微延遲以防 Vue 3 未載入事件監聽器
       await new Promise(r => setTimeout(r, 200))
-      
+
       confirmBtn.focus && confirmBtn.focus()
       confirmBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }))
       confirmBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }))
@@ -996,7 +996,7 @@
 
   async function uploadMediaAsync(data) {
     const mediaResults = []
-    
+
     // 重建 images 陣列：從 images 取，或從 ps_item_* 欄位重建（相容舊版 JSON）
     let images = Array.isArray(data.images) ? data.images : []
     if (images.length === 0) {
@@ -1012,7 +1012,7 @@
     if (images.length > 0) {
       console.log(`[SGC] Found ${images.length} images to upload`)
       const imageContainer = document.querySelector('[data-product-edit-field-unique-id="images"]')
-      
+
       if (!imageContainer) {
         mediaResults.push({ field: '商品圖片', ok: false, error: '找不到圖片上傳容器' })
       } else {
@@ -1081,7 +1081,7 @@
                   targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
                   targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }))
                   targetInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
-                  console.log(`[SGC] Injected file ${i+1}/${downloadedFiles.length} to input`)
+                  console.log(`[SGC] Injected file ${i + 1}/${downloadedFiles.length} to input`)
                   await new Promise(r => setTimeout(r, 500))
                 }
               }
@@ -1102,7 +1102,7 @@
     if (videos.length > 0) {
       console.log(`[SGC] Found ${videos.length} videos to upload`)
       const videoContainer = document.querySelector('[data-product-edit-field-unique-id="videos"], [data-product-edit-field-unique-id="video"]')
-      
+
       if (!videoContainer) {
         mediaResults.push({ field: '商品影片', ok: false, error: '找不到影片上傳容器' })
       } else {
@@ -1171,18 +1171,22 @@
     const price = data.ps_price ?? data.price ?? ''
     const title = data.ps_product_name || data.title || ''
 
-    results.push({ field: '商品名稱', ...(await fillFieldAsync(title,
-      () => findFieldByLabel('商品名稱'),
-      '[data-product-edit-field-unique-id="name"] input.eds-input__input',
-      'input[placeholder*="商品"]'
-    ))})
+    results.push({
+      field: '商品名稱', ...(await fillFieldAsync(title,
+        () => findFieldByLabel('商品名稱'),
+        '[data-product-edit-field-unique-id="name"] input.eds-input__input',
+        'input[placeholder*="商品"]'
+      ))
+    })
 
     if (desc) {
-      results.push({ field: '商品描述', ...(await fillFieldAsync(desc,
-        () => findFieldByLabel('商品描述'),
-        '[data-product-edit-field-unique-id="description"] .ql-editor',
-        'textarea'
-      ))})
+      results.push({
+        field: '商品描述', ...(await fillFieldAsync(desc,
+          () => findFieldByLabel('商品描述'),
+          '[data-product-edit-field-unique-id="description"] .ql-editor',
+          'textarea'
+        ))
+      })
     }
 
     let cleanPrice = ''
@@ -1191,25 +1195,40 @@
     }
 
     if (cleanPrice) {
-      results.push({ field: '價格', ...(await fillFieldAsync(cleanPrice,
-        () => findFieldByLabel('價格'),
-        '[data-product-edit-field-unique-id="price"] input.eds-input__input',
-        'input[placeholder*="價格"]'
-      ))})
+      results.push({
+        field: '價格', ...(await fillFieldAsync(cleanPrice,
+          () => findFieldByLabel('價格'),
+          '[data-product-edit-field-unique-id="price"] input.eds-input__input',
+          'input[placeholder*="價格"]'
+        ))
+      })
     }
 
     const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'
-    results.push({ field: '商品數量', ...(await fillFieldAsync(stockVal,
-      () => findFieldByLabel('商品數量'),
-      '[data-product-edit-field-unique-id="stock"] input.eds-input__input',
-      'input[placeholder*="數量"]'
-    ))})
+    results.push({
+      field: '商品數量', ...(await fillFieldAsync(stockVal,
+        () => findFieldByLabel('商品數量'),
+        '[data-product-edit-field-unique-id="stock"] input.eds-input__input',
+        'input[placeholder*="數量"]'
+      ))
+    })
 
-    results.push({ field: '最低購買數量', ...(await fillFieldAsync('1',
-      () => findFieldByLabel('最低購買數量'),
-      '[data-product-edit-field-unique-id="minpq"] input.eds-input__input',
-      'input[placeholder*="最低"]'
-    ))})
+    results.push({
+      field: '最低購買數量', ...(await fillFieldAsync('1',
+        () => findFieldByLabel('最低購買數量'),
+        '[data-product-edit-field-unique-id="minpq"] input.eds-input__input',
+        'input[placeholder*="最低"]'
+      ))
+    })
+
+    const weightVal = data.ps_weight != null && String(data.ps_weight).trim() !== '' ? String(data.ps_weight) : '0.5'
+    results.push({
+      field: '重量', ...(await fillFieldAsync(weightVal,
+        () => findFieldByLabel('重量'),
+        '[data-product-edit-field-unique-id="weight"] input.eds-input__input',
+        'input[placeholder*="重量"]'
+      ))
+    })
 
     const brandName = data.ps_brand || 'NoBrand'
     try {
@@ -1226,21 +1245,23 @@
         : ''
     )
     if (dimStr) {
-      results.push({ field: '尺寸（長 x 寬 x 高）', ...(await fillFieldAsync(dimStr,
-        () => findFieldByLabel('尺寸（長 x 寬 x 高）'),
-        async () => {
-          const attrSection = document.querySelector('[data-product-edit-field-unique-id="brandAndAttributes"]')
-          if (!attrSection) return null
-          const rows = attrSection.querySelectorAll('.edit-row')
-          for (const row of rows) {
-            const label = (row.querySelector('.edit-label')?.textContent || '').replace(/[\s*]+/g, '')
-            if (label.includes('尺寸')) {
-              return row.querySelector('input.eds-input__input')
+      results.push({
+        field: '尺寸（長 x 寬 x 高）', ...(await fillFieldAsync(dimStr,
+          () => findFieldByLabel('尺寸（長 x 寬 x 高）'),
+          async () => {
+            const attrSection = document.querySelector('[data-product-edit-field-unique-id="brandAndAttributes"]')
+            if (!attrSection) return null
+            const rows = attrSection.querySelectorAll('.edit-row')
+            for (const row of rows) {
+              const label = (row.querySelector('.edit-label')?.textContent || '').replace(/[\s*]+/g, '')
+              if (label.includes('尺寸')) {
+                return row.querySelector('input.eds-input__input')
+              }
             }
+            return null
           }
-          return null
-        }
-      ))})
+        ))
+      })
     }
 
     // ── 信用卡分期付款 ──
@@ -1312,8 +1333,10 @@
             } else {
               const allBtns = Array.from(document.querySelectorAll('button'))
                 .map(b => `"${b.textContent.trim()}" disabled=${b.disabled}`)
-              results.push({ field: '設定期數', ok: false,
-                error: `找不到啟用按鈕，所有按鈕: ${allBtns.join(' | ')}` })
+              results.push({
+                field: '設定期數', ok: false,
+                error: `找不到啟用按鈕，所有按鈕: ${allBtns.join(' | ')}`
+              })
             }
           }
         } catch (e) {
@@ -1347,35 +1370,129 @@
       return true
     }
     if (msg.action === 'getProductData') {
-      extractProductData().then(sendResponse)
+      extractProductData().then(data => sendResponse(data)).catch(e => sendResponse({ ok: false, error: e.message }))
       return true
     }
     if (msg.action === 'fillProductData') {
-      fillAll(msg.data || {}).then(sendResponse).catch(e => sendResponse({ ok: false, error: e.message }))
+      window._sgcFillState = { status: 'running', result: null }
+      fillAll(msg.data || {})
+        .then(res => { window._sgcFillState = { status: 'done', result: res } })
+        .catch(e => { window._sgcFillState = { status: 'done', result: { ok: false, error: e.message } } })
+      sendResponse({ ok: true, status: 'started' })
+      return true
+    }
+    if (msg.action === 'checkFillStatus') {
+      sendResponse(window._sgcFillState || { status: 'idle', result: null })
       return true
     }
     if (msg.action === 'uploadMedia') {
+      window._sgcMediaState = { status: 'running', result: null }
       uploadMediaAsync(msg.data || {}).then(results => {
         const ok = results.every(r => r.ok)
-        sendResponse({ ok, results })
-      }).catch(e => sendResponse({ ok: false, error: e.message }))
+        window._sgcMediaState = { status: 'done', result: { ok, results } }
+      }).catch(e => {
+        window._sgcMediaState = { status: 'done', result: { ok: false, error: e.message } }
+      })
+      sendResponse({ ok: true, status: 'started' })
+      return true
+    }
+    if (msg.action === 'checkMediaStatus') {
+      sendResponse(window._sgcMediaState || { status: 'idle', result: null })
       return true
     }
     if (msg.action === 'extractSellerProductList') {
-      sendResponse(extractSellerProductList())
+      Promise.resolve(extractSellerProductList()).then(items => sendResponse(items)).catch(() => sendResponse([]))
       return true
     }
+
+    function findMainSaveButton() {
+      const footer = document.querySelector(
+        '.product-edit-footer, .product-edit-bottom-bar, .eds-footer, footer, [class*="footer"], [class*="bottom-bar"]'
+      )
+      let footerBtns = []
+      if (footer) {
+        footerBtns = Array.from(footer.querySelectorAll('button, .eds-button')).filter(b => {
+          return !b.closest('.eds-modal, .eds-dialog, [role="dialog"], [class*="modal"]')
+        })
+      }
+      if (footerBtns.length > 0) {
+        let b = footerBtns.find(el => {
+          const t = (el.textContent || '').replace(/\s+/g, '')
+          return t.includes('儲存並上架') || t.includes('Save&Publish') || (t.includes('上架') && !t.includes('下架'))
+        })
+        if (b) return b
+        const revBtns = [...footerBtns].reverse()
+        b = revBtns.find(el => {
+          const t = (el.textContent || '').replace(/\s+/g, '')
+          const isPrimary = el.classList?.contains('eds-button--primary') || !!el.querySelector('.eds-button--primary')
+          return isPrimary && !/取消|預覽|下架/.test(t)
+        })
+        if (b) return b
+      }
+      const globalBtns = Array.from(document.querySelectorAll('button, .eds-button')).filter(b => {
+        const inModal = !!b.closest('.eds-modal, .eds-dialog, [role="dialog"], [class*="modal"]')
+        const inFormBody = !!b.closest('.edit-main, .edit-row, [class*="wholesale"], [class*="attribute"]')
+        return !inModal && !inFormBody
+      })
+      return globalBtns.find(b => {
+        const t = (b.textContent || '').replace(/\s+/g, '')
+        return t.includes('儲存並上架') || (t.includes('上架') && !t.includes('下架'))
+      }) || null
+    }
+
     if (msg.action === 'checkSaveButton') {
-      const btns = document.querySelectorAll('button')
-      const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
-      sendResponse({ ready: !!btn && !btn.disabled })
+      const btn = findMainSaveButton()
+      if (!btn) {
+        sendResponse({ ready: false, reason: '頁面上未找到「儲存並上架」按鈕' })
+        return true
+      }
+      const isDisabled = !!btn.disabled || btn.classList?.contains('eds-button--disabled') || btn.hasAttribute('disabled')
+      sendResponse({
+        ready: !isDisabled,
+        btnText: btn.textContent.trim(),
+        reason: isDisabled ? `按鈕「${btn.textContent.trim()}」處於停用狀態 (disabled)` : 'OK'
+      })
       return true
     }
+
     if (msg.action === 'clickSaveButton') {
-      const btns = document.querySelectorAll('button')
-      const btn = Array.from(btns).find(b => /儲存|保存|確認/.test(b.textContent))
-      if (btn) { btn.click(); sendResponse({ ok: true }) }
-      else sendResponse({ ok: false, error: '找不到儲存按鈕' })
+      const btn = findMainSaveButton()
+      if (!btn) {
+        sendResponse({ ok: false, error: '找不到儲存/上架按鈕' })
+        return true
+      }
+      const isDisabled = !!btn.disabled || btn.hasAttribute('disabled') || btn.classList?.contains('eds-button--disabled')
+      if (isDisabled) {
+        sendResponse({ ok: false, error: '「儲存並上架」按鈕被停用，無法點擊' })
+        return true
+      }
+      console.log('[SGC] Click save button:', btn.textContent.trim())
+      if (btn.focus) btn.focus()
+      const opts = { bubbles: true, cancelable: true, composed: true }
+      btn.dispatchEvent(new MouseEvent('mousedown', opts))
+      btn.dispatchEvent(new MouseEvent('mouseup', opts))
+      btn.click()
+
+      (async () => {
+        const start = Date.now()
+        while (Date.now() - start < 25000) {
+          await new Promise(r => setTimeout(r, 300))
+          if (window.location.pathname.includes('/portal/product/list')) {
+            sendResponse({ ok: true, note: '已成功跳轉至商品列表' })
+            return
+          }
+          const successToast = document.querySelector('.eds-toast--success, .eds-message--success, .shopee-toast--success, [class*="toast"][class*="success"]')
+          if (successToast) {
+            sendResponse({ ok: true, note: '成功提示: ' + successToast.textContent.trim() })
+            return
+          }
+        }
+        if (window.location.pathname.includes('/portal/product/list')) {
+          sendResponse({ ok: true, note: '已跳轉至列表' })
+        } else {
+          sendResponse({ ok: false, error: '點擊上架後蝦皮未跳轉且無回應' })
+        }
+      })()
       return true
     }
   })
@@ -1389,7 +1506,7 @@
       window.postMessage({ action: 'fillProductDataResult', result }, '*')
     }
     if (msg.action === 'extractSellerProductList') {
-      const items = extractSellerProductList()
+      const items = await extractSellerProductList()
       window.postMessage({ action: 'extractSellerProductListResult', items }, '*')
     }
     if (msg.action === 'getProductData') {
@@ -1398,25 +1515,89 @@
     }
   })
 
-  // ── 從我的商品列表頁 DOM 爬取已上架 SKU ──
-  function extractSellerProductList() {
+  // ── 從我的商品列表頁 DOM 精確爬取已上架商品 ──
+  async function extractSellerProductList() {
     const items = []
-    const rows = document.querySelectorAll('.eds-table__row.valign-top')
-    for (const row of rows) {
-      const nameLink = row.querySelector('a[href*="/portal/product/"]')
-      if (!nameLink) continue
-      const text = row.textContent
-      const skuMatch = text.match(/主商品貨號:\s*(\S+)/)
-      const idMatch = text.match(/商品 ID:\s*(\d+)/)
-      const priceMatch = text.match(/NT\$(\d+)/)
+    const nameSet = new Set()
+
+    // 1. DOM 精確匹配：包含商品 ID 的連結 (/portal/product/數字)
+    const productLinks = Array.from(document.querySelectorAll('a[href*="/portal/product/"]')).filter(a => {
+      const href = a.getAttribute('href') || a.href || ''
+      return /\/portal\/product\/\d+/.test(href)
+    })
+
+    for (const link of productLinks) {
+      const name = link.textContent.trim()
+      if (!name || nameSet.has(name)) continue
+      nameSet.add(name)
+
+      const href = link.getAttribute('href') || link.href || ''
+      const idMatch = href.match(/\/portal\/product\/(\d+)/)
+
       items.push({
-        name: nameLink.textContent.trim(),
+        name,
         productId: idMatch ? idMatch[1] : '',
-        sku: skuMatch && skuMatch[1] !== '-' ? skuMatch[1] : '',
-        url: nameLink.href,
-        price: priceMatch ? priceMatch[1] : '',
+        sku: '',
+        url: link.href || '',
+        price: '',
       })
     }
+
+    // 2. 同源 API 備用拉取：若 DOM 只有第 1 頁 (12 筆)，非同步拉取賣家中心全量商品 JSON
+    const apiEndpoints = [
+      '/api/v3/product/get_product_list?page_number=1&page_size=100&version=3.1.0',
+      '/api/v2/product/get_item_list?page_number=1&page_size=100'
+    ]
+    let apiSucceeded = false
+    for (const endpoint of apiEndpoints) {
+      try {
+        const res = await fetch(endpoint, { credentials: 'include' })
+        if (!res.ok) {
+          console.error(`[SGC] API 非 200：${endpoint} → status ${res.status} ${res.statusText}`)
+          continue
+        }
+        const json = await res.json()
+        const list = json?.data?.list || json?.data?.products || json?.data?.items || json?.list || []
+        if (Array.isArray(list) && list.length > 0) {
+          console.log(`[SGC] API 命中：${endpoint}，原始筆數 ${list.length}，樣本：${JSON.stringify(list[0]).slice(0, 300)}`)
+          for (const p of list) {
+            const name = (p.name || p.item_name || p.title || '').trim()
+            if (name && !nameSet.has(name)) {
+              nameSet.add(name)
+              items.push({
+                name,
+                productId: String(p.id || p.item_id || p.product_id || ''),
+                sku: p.sku || '',
+                url: '',
+                price: p.price ? String(p.price) : ''
+              })
+            }
+          }
+          apiSucceeded = true
+          break
+        }
+        console.error(`[SGC] API 回 200 但解析不到商品陣列，原始 JSON：${JSON.stringify(json).slice(0, 500)}`)
+      } catch (e) {
+        console.error(`[SGC] API 請求例外：${endpoint} → ${e.message}`)
+      }
+    }
+    if (!apiSucceeded) {
+      console.error(`[SGC] 兩個候選端點皆未取得有效商品陣列，目前僅回傳 DOM 第 1 頁 ${items.length} 筆`)
+    }
+
+    // 3. 備用：若極少數情況 DOM 未含有 URL 數字，從表格列 DOM 抓取名稱
+    if (items.length === 0) {
+      const rows = document.querySelectorAll('.eds-table__row, [class*="table__row"]')
+      for (const row of rows) {
+        const nameLink = row.querySelector('a[href*="/portal/product/"], [class*="name"], [class*="title"]')
+        if (!nameLink) continue
+        const name = nameLink.textContent.trim()
+        if (!name || name === '新增商品' || name === '修改' || nameSet.has(name)) continue
+        nameSet.add(name)
+        items.push({ name, productId: '', sku: '', url: '', price: '' })
+      }
+    }
+
     return items
   }
 

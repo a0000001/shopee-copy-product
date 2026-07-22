@@ -128,13 +128,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.action === 'appendToCatalog') {
     appendToCatalog(msg.serverUrl || 'http://localhost:9801', msg.product || {})
-      .then(sendResponse)
+      .then(res => sendResponse(res))
       .catch(err => sendResponse({ ok: false, error: err.message }))
     return true
   }
   if (msg.action === 'saveRawProductData') {
     saveRawProductData(msg.data || {}, msg.serverUrl || 'http://localhost:9801')
-      .then(sendResponse)
+      .then(res => sendResponse(res))
       .catch(err => sendResponse({ ok: false, error: err.message }))
     return true
   }
@@ -174,7 +174,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       port.onMessage.addListener(onMsg)
     })
-    waitForRunning.then(sendResponse)
+    waitForRunning.then(res => sendResponse(res))
     return true
   }
   if (msg.action === 'serverStop') {
