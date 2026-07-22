@@ -77,48 +77,55 @@ async function scanProducts() {
             const items = []
             const nameSet = new Set()
 
-            // 1. 同源 API 優先非同步拉取 (page_size=100)
-            const apiUrls = [
-              '/api/v3/product/get_product_list?page_number=1&page_size=100&version=3.1.0',
-              '/api/v2/product/get_item_list?page_number=1&page_size=100'
-            ]
-            let apiSucceeded = false
-            for (const u of apiUrls) {
-              try {
-                const r = await fetch(u, { credentials: 'include' })
-                if (!r.ok) {
-                  console.error(`[SGC] API 非 200：${u} → status ${r.status} ${r.statusText}`)
-                  continue
-                }
-                const j = await r.json()
-                const list = j?.data?.list || j?.data?.products || j?.data?.items || j?.list || []
-                if (Array.isArray(list) && list.length > 0) {
-                  console.log(`[SGC] API 命中：${u}，原始筆數 ${list.length}`)
-                  for (const item of list) {
-                    const name = (item.name || item.item_name || item.title || '').trim()
-                    if (name && !nameSet.has(name)) {
-                      nameSet.add(name)
-                      items.push({ name, productId: String(item.id || item.item_id || item.product_id || '') })
-                    }
-                  }
-                  if (items.length > 0) return items
-                }
-                console.error(`[SGC] API 回 200 但解析不到商品陣列：${u}`)
-              } catch (e) {
-                console.error(`[SGC] API 請求例外：${u} → ${e.message}`)
+            function collectDOM() {
+              for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
+                const href = a.getAttribute('href') || ''
+                if (!/\/portal\/product\/\d+/.test(href)) continue
+                const name = a.textContent.trim()
+                if (!name || nameSet.has(name)) continue
+                nameSet.add(name)
+                const idMatch = href.match(/\/portal\/product\/(\d+)/)
+                items.push({ name, productId: idMatch ? idMatch[1] : '' })
               }
             }
+            function readTotal() {
+              const t = document.body?.textContent || ''
+              const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
+              return m ? parseInt(m[1]) : 0
+            }
+            function clickNext() {
+              for (const s of ['.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
+                const e = document.querySelector(s)
+                if (!e) continue
+                if (e.disabled||e.classList.contains('disabled')||e.getAttribute('aria-disabled')==='true') return false
+                e.click(); return true
+              }
+              return false
+            }
+            function waitTable(t) {
+              const tb = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
+              if (!tb) return new Promise(r=>setTimeout(r,2000))
+              return new Promise(r=>{let l=tb.innerHTML;const o=new MutationObserver(()=>{if(tb.innerHTML!==l){o.disconnect();setTimeout(r,400)}});o.observe(tb,{childList:true,subtree:true});setTimeout(()=>{o.disconnect();r()},t||6000)})
+            }
 
-            // 2. DOM 備用匹配：讀取當前 DOM 連結 (/portal/product/數字)
-            const productLinks = Array.from(document.querySelectorAll('a[href*="/portal/product/"]')).filter(a => {
-              const href = a.getAttribute('href') || a.href || ''
-              return /\/portal\/product\/\d+/.test(href)
-            })
-            for (const link of productLinks) {
-              const name = link.textContent.trim()
-              if (!name || nameSet.has(name)) continue
-              nameSet.add(name)
-              items.push({ name })
+            // 1. API（main world 通常被擋）
+            const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
+            try {
+              const r = await fetch('/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS='+encodeURIComponent(cds)+'&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false',{credentials:'include'})
+              if (r.ok) {
+                const list = (await r.json())?.data?.products||[]
+                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}; if(items.length>0) return items }
+              }
+            } catch(e) {}
+
+            // 2. DOM + SPA 翻頁
+            collectDOM()
+            let total=readTotal(), pages=Math.ceil(total/12), cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
+            while (cur<pages && items.length<total) {
+              if (!clickNext()) break
+              await waitTable()
+              collectDOM()
+              total=readTotal(); pages=Math.ceil(total/12); cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
             }
             return items
           }

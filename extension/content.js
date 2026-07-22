@@ -1404,6 +1404,10 @@
       Promise.resolve(extractSellerProductList()).then(items => sendResponse(items)).catch(() => sendResponse([]))
       return true
     }
+    if (msg.action === 'getPageInfo') {
+      sendResponse(readPageInfo())
+      return true
+    }
 
     function findMainSaveButton() {
       const footer = document.querySelector(
@@ -1509,83 +1513,129 @@
       const items = await extractSellerProductList()
       window.postMessage({ action: 'extractSellerProductListResult', items }, '*')
     }
+    if (msg.action === 'getPageInfo') {
+      window.postMessage({ action: 'getPageInfoResult', pageInfo: readPageInfo() }, '*')
+    }
     if (msg.action === 'getProductData') {
       const data = await extractProductData()
       window.postMessage({ action: 'getProductDataResult', data }, '*')
     }
   })
 
-  // ── 從我的商品列表頁 DOM 精確爬取已上架商品 ──
+  // ── 從我的商品列表頁 DOM 精確爬取已上架商品（含 SPA 自動翻頁） ──
   async function extractSellerProductList() {
     const items = []
     const nameSet = new Set()
 
-    // 1. DOM 精確匹配：包含商品 ID 的連結 (/portal/product/數字)
-    const productLinks = Array.from(document.querySelectorAll('a[href*="/portal/product/"]')).filter(a => {
-      const href = a.getAttribute('href') || a.href || ''
-      return /\/portal\/product\/\d+/.test(href)
-    })
+    // 收集當前 DOM 頁面的商品
+    function collectFromDOM() {
+      let n = 0
+      for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
+        const href = a.getAttribute('href') || ''
+        if (!/\/portal\/product\/\d+/.test(href)) continue
+        const name = a.textContent.trim()
+        if (!name || nameSet.has(name)) continue
+        nameSet.add(name); n++
+        const idMatch = href.match(/\/portal\/product\/(\d+)/)
+        items.push({
+          name,
+          productId: idMatch ? idMatch[1] : '',
+          sku: '',
+          url: a.href || '',
+          price: '',
+        })
+      }
+      return n
+    }
 
-    for (const link of productLinks) {
-      const name = link.textContent.trim()
-      if (!name || nameSet.has(name)) continue
-      nameSet.add(name)
+    // 從頁面文字讀取總數
+    function readTotal() {
+      const t = document.body?.textContent || ''
+      const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
+      return m ? parseInt(m[1]) : 0
+    }
 
-      const href = link.getAttribute('href') || link.href || ''
-      const idMatch = href.match(/\/portal\/product\/(\d+)/)
+    // 點擊下一頁按鈕
+    function clickNextPage() {
+      for (const sel of [
+        '.eds-pagination__next button,.eds-pagination__next',
+        '[class*="pagination"] [class*="next"] button',
+        'button[class*="next"],a[class*="next"]',
+        'li.next a,li.next button,.ant-pagination-next'
+      ]) {
+        const el = document.querySelector(sel)
+        if (!el) continue
+        if (el.disabled||el.classList.contains('disabled')||el.getAttribute('aria-disabled')==='true') return false
+        el.click(); return true
+      }
+      return false
+    }
 
-      items.push({
-        name,
-        productId: idMatch ? idMatch[1] : '',
-        sku: '',
-        url: link.href || '',
-        price: '',
+    // 等待商品表格重新渲染（Vue DOM 更新）
+    function waitForRender(timeout) {
+      const tbl = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
+      if (!tbl) return new Promise(r => setTimeout(r, 2000))
+      return new Promise(r => {
+        let last = tbl.innerHTML
+        const mo = new MutationObserver(() => {
+          if (tbl.innerHTML !== last) { mo.disconnect(); setTimeout(r, 400) }
+        })
+        mo.observe(tbl, { childList: true, subtree: true })
+        setTimeout(() => { mo.disconnect(); r() }, timeout||6000)
       })
     }
 
-    // 2. 同源 API 備用拉取：若 DOM 只有第 1 頁 (12 筆)，非同步拉取賣家中心全量商品 JSON
-    const apiEndpoints = [
-      '/api/v3/product/get_product_list?page_number=1&page_size=100&version=3.1.0',
-      '/api/v2/product/get_item_list?page_number=1&page_size=100'
-    ]
-    let apiSucceeded = false
-    for (const endpoint of apiEndpoints) {
-      try {
-        const res = await fetch(endpoint, { credentials: 'include' })
-        if (!res.ok) {
-          console.error(`[SGC] API 非 200：${endpoint} → status ${res.status} ${res.statusText}`)
-          continue
-        }
+    // 1. 先收集當前頁
+    collectFromDOM()
+    let total = readTotal()
+    let pages = Math.ceil(total / 12)
+    let curPage = parseInt(new URL(location.href).searchParams.get('page') || '1')
+
+    // 2. 嘗試同源 API 拉取（isolated world 可能繞過反爬）
+    const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ''
+    const realApiUrl = '/api/v3/opt/mpsku/list/v2/search_product_list'
+      + '?SPC_CDS=' + encodeURIComponent(cds)
+      + '&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false'
+    let apiOk = false
+    try {
+      const res = await fetch(realApiUrl, { credentials: 'include' })
+      if (res.ok) {
         const json = await res.json()
-        const list = json?.data?.list || json?.data?.products || json?.data?.items || json?.list || []
+        const list = json?.data?.products || []
         if (Array.isArray(list) && list.length > 0) {
-          console.log(`[SGC] API 命中：${endpoint}，原始筆數 ${list.length}，樣本：${JSON.stringify(list[0]).slice(0, 300)}`)
+          console.log(`[SGC] API 命中 ${list.length} 筆`)
           for (const p of list) {
-            const name = (p.name || p.item_name || p.title || '').trim()
+            const name = (p.name || '').trim()
             if (name && !nameSet.has(name)) {
               nameSet.add(name)
               items.push({
-                name,
-                productId: String(p.id || p.item_id || p.product_id || ''),
-                sku: p.sku || '',
-                url: '',
-                price: p.price ? String(p.price) : ''
+                name, productId: String(p.id||''), sku: p.parent_sku||'', url: '', price: p.price_detail?.price_min||''
               })
             }
           }
-          apiSucceeded = true
-          break
+          apiOk = true
         }
-        console.error(`[SGC] API 回 200 但解析不到商品陣列，原始 JSON：${JSON.stringify(json).slice(0, 500)}`)
-      } catch (e) {
-        console.error(`[SGC] API 請求例外：${endpoint} → ${e.message}`)
       }
-    }
-    if (!apiSucceeded) {
-      console.error(`[SGC] 兩個候選端點皆未取得有效商品陣列，目前僅回傳 DOM 第 1 頁 ${items.length} 筆`)
+    } catch (e) { console.error(`[SGC] API 例外: ${e.message}`) }
+
+    if (apiOk) {
+      console.log(`[SGC] API 回傳 ${items.length} 筆`)
+      return items
     }
 
-    // 3. 備用：若極少數情況 DOM 未含有 URL 數字，從表格列 DOM 抓取名稱
+    // 3. API 被擋 → SPA 點擊翻頁補齊
+    console.log(`[SGC] API 不可用，SPA 翻頁收集 (${items.length}/${total})`)
+    while (curPage < pages && items.length < total) {
+      if (!clickNextPage()) { console.log('[SGC] 無下一頁按鈕'); break }
+      await waitForRender()
+      collectFromDOM()
+      total = readTotal()
+      pages = Math.ceil(total / 12)
+      curPage = parseInt(new URL(location.href).searchParams.get('page') || String(curPage+1))
+      console.log(`[SGC] SPA 翻頁 ${curPage}/${pages} | ${items.length}/${total}`)
+    }
+
+    // 4. 備用：若 DOM 完全沒抓到，從表格列抓
     if (items.length === 0) {
       const rows = document.querySelectorAll('.eds-table__row, [class*="table__row"]')
       for (const row of rows) {
@@ -1599,6 +1649,22 @@
     }
 
     return items
+  }
+
+  // ── 從頁面 DOM 讀取分頁資訊（供 caller 決定是否需要額外翻頁） ──
+  function readPageInfo() {
+    const bodyText = document.body?.textContent || ''
+    const totalMatch = bodyText.match(/總計\s*(\d+)\s*項/)
+      || bodyText.match(/共\s*(\d+)\s*筆/)
+      || bodyText.match(/全部\s*(\d+)/)
+      || bodyText.match(/(\d+)\s*件\s*商品/)
+      || bodyText.match(/架上商品\((\d+)\)/)
+    if (!totalMatch) return null
+    const totalCount = parseInt(totalMatch[1])
+    const pageSize = 12
+    const totalPages = Math.ceil(totalCount / pageSize)
+    const currentPage = parseInt((window.location.href.match(/[?&]page=(\d+)/) || [])[1] || '1')
+    return { totalCount, currentPage, totalPages, pageSize }
   }
 
   // ── Auto-trigger carousel full render on product page（讓第一次點 icon 就有完整圖片） ──
