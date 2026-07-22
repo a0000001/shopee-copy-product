@@ -259,6 +259,16 @@ check("batch-upload.js 含 fillAndSave", "fillAndSave" in batch_js_text)
 check("batch-upload.js 含 checkSaveButton", "checkSaveButton" in batch_js_text)
 check("batch-upload.js 含 clickSaveButton", "clickSaveButton" in batch_js_text)
 
+batch_test_html = (BASE / "extension" / "batch-upload-test.html")
+check("batch-upload-test.html 存在", batch_test_html.exists())
+check("batch-upload-test.html 含 ping", "ping" in batch_test_html.read_text(encoding="utf-8"))
+
+popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
+check("popup.html 含 btnBatchTest", "btnBatchTest" in popup_html)
+
+popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
+check("popup.js 含 batch-upload-test.html", "batch-upload-test.html" in popup_js)
+
 # ── Results ──
 print(f"\n{'='*40}")
 print(f"通過：{passed}  失敗：{failed}")

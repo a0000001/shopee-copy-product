@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>批次上傳測試</title></head>
+<body>
+  <h1>批次上傳最小測試</h1>
+  <button id="btnTest">測試：開新分頁 → 送訊息</button>
+  <pre id="output" style="margin-top:16px;padding:12px;background:#f5f5f5;border-radius:6px;min-height:100px;font-size:12px;line-height:1.5;"></pre>
+  <script>
+    const $ = id => document.getElementById(id)
+    const out = document.getElementById('output')
+
+    function log(msg) {
+      out.textContent += '[' + new Date().toLocaleTimeString() + '] ' + msg + '\n'
+    }
+
+    document.getElementById('btnTest').addEventListener('click', async () => {
+      out.textContent = ''
+      log('開始測試...')
+
+      let tab = null
+      try {
+        // 1. 開新分頁
+        log('建立新分頁...')
+        tab = await chrome.tabs.create({
+          url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
+        })
+        log('tab.id: ' + tab.id)
+        log('tab.url: ' + tab.url)
+        log('tab.status: ' + tab.status)
+
+        // 2. 等待載入
+        log('等待分頁載入...')
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('超時')), 20000)
+          function onUpdated(id, info) {
+            if (id === tab.id && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(onUpdated)
+              clearTimeout(timer)
+              setTimeout(resolve, 1000)
+            }
+          }
+          chrome.tabs.onUpdated.addListener(onUpdated)
+        })
+        log('分頁載入完成')
+
+        // 3. 送測試訊息
+        log('送出 ping 訊息...')
+        const result = await chrome.tabs.sendMessage(tab.id, { action: 'ping' })
+        log('✅ ping 成功：' + JSON.stringify(result))
+
+        // 4. 送 fillProductData
+        log('送出 fillProductData...')
+        const testData = {
+          ps_product_name: '測試商品請勿下單',
+          ps_price: 999,
+          ps_product_description: '測試用',
+          ps_stock: 1,
+          ps_category: '100644,101937',
+        }
+        const fillResult = await chrome.tabs.sendMessage(tab.id, { action: 'fillProductData', data: testData })
+        log('✅ fillProductData 成功：' + JSON.stringify(fillResult))
+
+      } catch (e) {
+        log('❌ 錯誤：' + e.message)
+        log('❌ 錯誤類型：' + e.constructor.name)
+        log('❌ stack：' + (e.stack || '無'))
+      } finally {
+        if (tab && tab.id) {
+          setTimeout(() => {
+            try { chrome.tabs.remove(tab.id) } catch {}
+            log('測試分頁已關閉')
+          }, 3000)
+        }
+      }
+    })
+  </script>
+</body>
+</html>

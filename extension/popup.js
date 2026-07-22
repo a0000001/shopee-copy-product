@@ -298,6 +298,9 @@ function initSellerMode(tab) {
   $('btnBatchUpload').addEventListener('click', () => {
     chrome.tabs.create({ url: 'batch-upload.html' })
   })
+  $('btnBatchTest').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'batch-upload-test.html' })
+  })
 }
 
 const CATEGORY_MAP = {
