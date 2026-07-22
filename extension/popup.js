@@ -266,33 +266,55 @@ function initSellerMode(tab) {
     $('fillResult').style.display = 'none'
 
     try {
-      const resp = await chrome.tabs.sendMessage(tab.id, {
+      const started = await chrome.tabs.sendMessage(tab.id, {
         action: 'fillProductData',
         data
       })
-      const el = $('fillResult')
-      el.style.display = 'block'
-      if (resp?.ok) {
-        const ok = (resp.results || []).filter(r => r.ok).length
-        const total = (resp.results || []).length
-        const details = (resp.results || []).map(r => `${r.ok ? '✅' : '❌'} ${r.field}: ${r.error || 'ok'}`).join('\n')
-        el.className = 'value'
-        el.style.color = '#26aa99'
-        el.textContent = `✅ 完成 ${ok}/${total} 個欄位`
-        el.title = details
-      } else {
-        el.className = 'value error'
-        el.textContent = `❌ ${resp?.error || '填入失敗'}`
-      }
+      if (!started?.ok) throw new Error(started?.error || 'content script 無回應')
     } catch (e) {
       const el = $('fillResult')
       el.style.display = 'block'
       el.className = 'value error'
       el.textContent = '❌ 通訊失敗：' + e.message
-    } finally {
       $('btnFill').disabled = false
       $('btnFill').textContent = '📋 從剪貼簿填入'
+      return
     }
+
+    const el = $('fillResult')
+    el.style.display = 'block'
+    el.className = 'value'
+    el.style.color = '#888'
+    el.textContent = '填入中⋯'
+
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 500))
+      let state
+      try {
+        state = await chrome.tabs.sendMessage(tab.id, { action: 'checkFillStatus' })
+      } catch {
+        el.textContent = '❌ 通訊中斷'
+        el.className = 'value error'
+        break
+      }
+      if (!state || state.status === 'running') {
+        el.textContent = `填入中${'.'.repeat((i % 3) + 1)}`
+        continue
+      }
+      const result = state.result || {}
+      const okCount = (result.results || []).filter(r => r.ok).length
+      const total = (result.results || []).length
+      const details = (result.results || []).map(r => `${r.ok ? '✅' : '❌'} ${r.field}: ${r.error || 'ok'}`).join('\n')
+      el.style.color = result.ok ? '#26aa99' : '#e74c3c'
+      el.textContent = result.ok
+        ? `✅ 完成 ${okCount}/${total} 個欄位`
+        : `❌ ${result.error || '填入失敗'}`
+      el.title = details
+      break
+    }
+
+    $('btnFill').disabled = false
+    $('btnFill').textContent = '📋 從剪貼簿填入'
   })
 
   $('btnBatchUpload').addEventListener('click', () => {
