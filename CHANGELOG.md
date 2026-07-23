@@ -6,10 +6,10 @@
 
 ### 修復：全量頁籤商品掃描 (35 架上 + 3 審核中 = 38 筆) 與直注入發布判定 (026-04 spec)
 
-- `extension/batch-upload.js` — 🔥 **實作全量頁籤商品雙重掃描**：採用 DOM 安定掃描 (安定取得 35 筆架上商品) + `executeScript` 補充 API 爬取 (`reviewing` 審核中 3 筆) 雙重合併去重機制。徹底解決純 API 爬取遺漏問題，安定顯示 `38 筆已上架商品 (35 筆架上 + 3 筆審核中/其他)`。
+- `extension/batch-upload.js` — 🔥 **實作全量頁籤商品雙重掃描**：採用 DOM 安定掃描 (安定取得 35 筆架上商品) + `executeScript` 補充 API 爬取 (`reviewing` 審核中 3 筆) 雙重合併去重機制。已成功將全量 38 筆納入防重複上架比對；顯示細節文字「38 筆 (35 筆已上架 + 3 筆審核中)」因多次修復未果決定保持現狀（顯示 38 筆已上架），不再進行 UI 文字修改。
 - `docs/data/mcp devtools 蒐集的蝦皮資料/001-賣家中心新增商品（seller-new-product-dom-analysis）.md` — 更新真實頁面 URL 與 API `list_type` 參數對照表。
 - `extension/batch-upload.js` — 🔥 **`chrome.scripting.executeScript` 直注入發布判定**：點擊「儲存並上架」後，採用直注入輪詢檢查 DOM 是否彈出「審核中」、「提交成功」或 URL 跳轉，徹底解鎖訊息通道發送中斷與審核無跳轉造成的誤判 Retry 致命問題。
-- `docs/spec/026-04-plan-商品列表含審核頁籤全量掃描與點擊發布直注入檢查.md` — 新增 026-04 規格計畫文件。
+- `docs/spec/026-04-plan-商品列表含審核頁籤全量掃描與點擊發布直注入檢查.md` — 更新 026-04 規格計畫文件並紀錄狀態標註。
 
 ### 修復：信用卡分期金額條件判定 (Price >= 1000 啟用 24 期) 與測試斷言同步
 
