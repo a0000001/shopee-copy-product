@@ -1197,26 +1197,17 @@
     return mediaResults
   }
 
+  // 隨機 Jitter 擬真停頓 (150ms ~ 350ms)
+  function randomJitter(min = 150, max = 350) {
+    const ms = Math.floor(Math.random() * (max - min + 1)) + min
+    return new Promise(r => setTimeout(r, ms))
+  }
+
   async function fillAll(data) {
     const results = []
 
-    // 先選取類別
-    try {
-      const catResult = await fillCategoryAsync(data)
-      results.push({ field: '類別', ...catResult })
-      // 如果類別有變更，等待 1000ms 讓 Vue DOM 重新渲染並穩定下來，防止後續填入的欄位值被清空
-      if (catResult.ok && !catResult.alreadySelected) {
-        console.log('[SGC] Category changed, waiting 1000ms for DOM re-render to settle...')
-        await new Promise(r => setTimeout(r, 1000))
-      }
-    } catch (e) {
-      results.push({ field: '類別', ok: false, error: e.message })
-    }
-
-    const desc = data.ps_product_description || data.description || ''
-    const price = data.ps_price ?? data.price ?? ''
+    // 1. 商品名稱 (由上至下第 1 區塊)
     const title = data.ps_product_name || data.title || ''
-
     results.push({
       field: '商品名稱', ...(await fillFieldAsync(title,
         () => findFieldByLabel('商品名稱'),
@@ -1224,66 +1215,22 @@
         'input[placeholder*="商品"]'
       ))
     })
+    await randomJitter()
 
-    if (desc) {
-      results.push({
-        field: '商品描述', ...(await fillFieldAsync(desc,
-          () => findFieldByLabel('商品描述'),
-          '[data-product-edit-field-unique-id="description"] .ql-editor',
-          '[data-product-edit-field-unique-id="description"] [contenteditable="true"]',
-          '[data-product-edit-field-unique-id="description"] .rich-text-editor',
-          'textarea'
-        ))
-      })
-    }
-
-    let cleanPrice = ''
-    if (price != null && price !== '') {
-      cleanPrice = String(price).split('~')[0].split('-')[0].replace(/[^\d]/g, '').trim()
-    }
-
-    if (cleanPrice) {
-      const priceRes = await fillFieldAsync(cleanPrice,
-        () => findFieldByLabel('價格'),
-        '[data-product-edit-field-unique-id="price"] input.eds-input__input',
-        'input[placeholder*="價格"]'
-      )
-      results.push({ field: '價格', ...priceRes })
-      if (priceRes.ok) {
-        console.log('[SGC] Price filled, waiting 600ms for Sales Info and Installment DOM to render...')
-        await new Promise(r => setTimeout(r, 600))
+    // 2. 類別 (由上至下第 2 區塊)
+    try {
+      const catResult = await fillCategoryAsync(data)
+      results.push({ field: '類別', ...catResult })
+      if (catResult.ok && !catResult.alreadySelected) {
+        console.log('[SGC] Category changed, waiting 1000ms for DOM re-render to settle...')
+        await new Promise(r => setTimeout(r, 1000))
       }
+    } catch (e) {
+      results.push({ field: '類別', ok: false, error: e.message })
     }
+    await randomJitter()
 
-    const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'
-    results.push({
-      field: '商品數量', ...(await fillFieldAsync(stockVal,
-        '[data-product-edit-field-unique-id="stock"] input.eds-input__input:not([type="file"])',
-        '[data-product-edit-field-unique-id="stock"] input:not([type="file"])',
-        () => findFieldByLabel('商品數量'),
-        () => findFieldByLabel('數量'),
-        () => findFieldByLabel('庫存'),
-        'input[placeholder*="庫存"]'
-      ))
-    })
-
-    results.push({
-      field: '最低購買數量', ...(await fillFieldAsync('1',
-        () => findFieldByLabel('最低購買數量'),
-        '[data-product-edit-field-unique-id="minpq"] input.eds-input__input',
-        'input[placeholder*="最低"]'
-      ))
-    })
-
-    const weightVal = data.ps_weight != null && String(data.ps_weight).trim() !== '' ? String(data.ps_weight) : '0.5'
-    results.push({
-      field: '重量', ...(await fillFieldAsync(weightVal,
-        () => findFieldByLabel('重量'),
-        '[data-product-edit-field-unique-id="weight"] input.eds-input__input',
-        'input[placeholder*="重量"]'
-      ))
-    })
-
+    // 3. 屬性 -> 品牌 (由上至下第 3 區塊)
     const brandName = data.ps_brand || 'NoBrand'
     try {
       const brandResult = await fillBrandAsync(brandName)
@@ -1291,8 +1238,9 @@
     } catch (e) {
       results.push({ field: '品牌', ok: false, error: e.message })
     }
+    await randomJitter()
 
-    // ── 填入屬性：尺寸（長 x 寬 x 高） ──
+    // 4. 屬性 -> 包裝尺寸 (長 x 寬 x 高) (由上至下第 4 區塊)
     const dimStr = data.dimension || (
       data.ps_length && data.ps_width && data.ps_height
         ? `${data.ps_length}x${data.ps_width}x${data.ps_height}`
@@ -1316,9 +1264,63 @@
           }
         ))
       })
+      await randomJitter()
     }
 
-    // ── 信用卡分期付款 ──
+    // 5. 商品描述 (由上至下第 5 區塊)
+    const desc = data.ps_product_description || data.description || ''
+    if (desc) {
+      results.push({
+        field: '商品描述', ...(await fillFieldAsync(desc,
+          () => findFieldByLabel('商品描述'),
+          '[data-product-edit-field-unique-id="description"] .ql-editor',
+          '[data-product-edit-field-unique-id="description"] [contenteditable="true"]',
+          '[data-product-edit-field-unique-id="description"] .rich-text-editor',
+          'textarea'
+        ))
+      })
+      await randomJitter()
+    }
+
+    // 6. 價格 (由上至下第 6 區塊，核心啟用前置)
+    const price = data.ps_price ?? data.price ?? ''
+    let cleanPrice = ''
+    if (price != null && price !== '') {
+      cleanPrice = String(price).split('~')[0].split('-')[0].replace(/[^\d]/g, '').trim()
+    }
+
+    if (cleanPrice) {
+      const priceRes = await fillFieldAsync(cleanPrice,
+        () => findFieldByLabel('價格'),
+        '[data-product-edit-field-unique-id="price"] input.eds-input__input',
+        'input[placeholder*="價格"]'
+      )
+      results.push({ field: '價格', ...priceRes })
+      if (priceRes.ok) {
+        console.log('[SGC] Price filled, waiting 600ms for Sales Info and Installment DOM to render...')
+        await new Promise(r => setTimeout(r, 600))
+      }
+    }
+    await randomJitter()
+
+    // 7. 數量 (由上至下第 7 區塊)
+    const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'
+    results.push({
+      field: '商品數量', ...(await fillFieldAsync(stockVal,
+        '[data-product-edit-field-unique-id="stock"] input.eds-input__input:not([type="file"])',
+        '[data-product-edit-field-unique-id="stock"] input:not([type="file"])',
+        () => findFieldByLabel('商品數量'),
+        () => findFieldByLabel('數量'),
+        () => findFieldByLabel('庫存'),
+        'input[placeholder*="庫存"]'
+      ))
+    })
+    await randomJitter()
+
+    // 8. 最低購買數量：跳過不填，保持蝦皮預設值 1
+    // 9. 運費/重量：跳過不填，保持蝦皮預設空白
+
+    // 10. 信用卡分期 (由上至下第 10 區塊)
     const installment = data.installment
     if (installment) {
       try {

@@ -303,7 +303,16 @@ async function fillAndSaveSingle(item, tabId) {
     try {
       const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
       if (checkResult && checkResult.ready) {
-        const clickRes = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
+        const clickRes = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' }).catch(() => null)
+        
+        // 點擊後等待 2 秒檢查 Tab 網址，若已跳轉至商品列表頁或離開 new 頁，視為成功上架（防範連線斷開誤判失敗觸發 Retry）
+        await sleep(2000)
+        const finalTab = await chrome.tabs.get(tabId).catch(() => null)
+        if (finalTab && (finalTab.url.includes('/portal/product/list') || !finalTab.url.includes('/portal/product/new'))) {
+          console.log('[SGC] Tab redirected to list page, upload confirmed successful')
+          return true
+        }
+
         if (clickRes && clickRes.ok) return true
         throw new Error((clickRes && clickRes.error) || '點擊上架按鈕失敗')
       } else if (checkResult && checkResult.reason) {
@@ -387,7 +396,7 @@ $('btnStart').addEventListener('click', async () => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     if (success) {
       state.results.push({ name: item.ps_product_name, ok: true })
-      log(`✅ [${elapsed}s] ${item.ps_product_name} (已成功跳轉至商品列表)`, 'ok')
+      log(`✅ [${elapsed}s] ${item.ps_product_name} (已成功上架並跳轉)`, 'ok')
       consecutiveFailures = 0
     } else {
       state.results.push({ name: item.ps_product_name, ok: false, error: lastErr })
@@ -406,7 +415,10 @@ $('btnStart').addEventListener('click', async () => {
       }
     }
 
-    await sleep(3000)
+    // 擬真沉浸：每筆商品間使用 6 ~ 12 秒隨機冷卻，避開蝦皮風控佇列
+    const coolDownMs = Math.floor(Math.random() * (12000 - 6000 + 1)) + 6000
+    log(`⏳ 啟動 ${(coolDownMs / 1000).toFixed(1)} 秒隨機沉浸冷卻間隔...`, 'info')
+    await sleep(coolDownMs)
   }
 
   state.isRunning = false
