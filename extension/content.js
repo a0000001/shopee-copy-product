@@ -588,6 +588,8 @@
   }
 
   function setNativeValue(input, value) {
+    if (input.type === 'file') return
+
     if (input.classList.contains('ql-editor') || input.getAttribute('contenteditable') === 'true') {
       input.innerHTML = '<p>' + value.split('\n').join('</p><p>') + '</p>'
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
@@ -649,8 +651,8 @@
 
     if (fieldId) {
       const el = document.querySelector(
-        `[data-product-edit-field-unique-id="${fieldId}"] input.eds-input__input, ` +
-        `[data-product-edit-field-unique-id="${fieldId}"] input, ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] input.eds-input__input:not([type="file"]), ` +
+        `[data-product-edit-field-unique-id="${fieldId}"] input:not([type="file"]), ` +
         `[data-product-edit-field-unique-id="${fieldId}"] textarea.eds-input__input, ` +
         `[data-product-edit-field-unique-id="${fieldId}"] textarea, ` +
         `[data-product-edit-field-unique-id="${fieldId}"] [contenteditable="true"], ` +
@@ -664,7 +666,7 @@
       if (!labelEl) continue
       const text = (labelEl.textContent || '').trim().replace(/[\s*]+/g, '')
       if (text === cleanLabel || text.includes(cleanLabel) || cleanLabel.includes(text)) {
-        const input = row.querySelector('input.eds-input__input, input, textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor')
+        const input = row.querySelector('input.eds-input__input:not([type="file"]), input:not([type="file"]), textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor')
         if (input) return input
       }
     }
@@ -676,9 +678,9 @@
       const forId = lb.getAttribute('for')
       if (forId) { const el = document.getElementById(forId); if (el) return el }
       const next = lb.nextElementSibling
-      if (next && next.matches('input, textarea, select')) return next
+      if (next && next.matches('input:not([type="file"]), textarea, select')) return next
       const item = lb.closest('.ant-form-item, [class*="form-item"], [class*="field"]')
-      if (item) { const el = item.querySelector('input, textarea, [contenteditable="true"]'); if (el) return el }
+      if (item) { const el = item.querySelector('input:not([type="file"]), textarea, [contenteditable="true"]'); if (el) return el }
     }
     return null
   }
@@ -1208,8 +1210,8 @@
         () => findFieldByLabel('商品數量'),
         () => findFieldByLabel('數量'),
         () => findFieldByLabel('庫存'),
-        '[data-product-edit-field-unique-id="stock"] input.eds-input__input',
-        '[data-product-edit-field-unique-id="stock"] input',
+        '[data-product-edit-field-unique-id="stock"] input.eds-input__input:not([type="file"])',
+        '[data-product-edit-field-unique-id="stock"] input:not([type="file"])',
         'input[placeholder*="數量"]',
         'input[placeholder*="庫存"]'
       ))
