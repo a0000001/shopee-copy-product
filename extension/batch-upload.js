@@ -70,96 +70,76 @@ async function scanProducts() {
     }
     log('目標賣家分頁: ' + sellerTab.url, 'info')
 
-    let products = null
+    let products = []
+    const nameSet = new Set()
+    let liveCount = 0
+    let reviewCount = 0
 
-    // 1. 第一優先：改用 chrome.scripting.executeScript 直接發動蝦皮多頁籤 API 爬取 (live_all, reviewing, unpublished)
+    // 1. 第一步：先透過 sendMessage 取得穩定的 35 筆架上 DOM 商品
+    try {
+      const domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
+      if (Array.isArray(domItems)) {
+        for (const item of domItems) {
+          const n = (item.name || '').trim()
+          if (n && !nameSet.has(n)) {
+            nameSet.add(n)
+            products.push(item)
+            liveCount++
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[SGC] DOM sendMessage scan failed:', e.message)
+    }
+
+    // 2. 第二步：使用 executeScript 直注入發送 API，專門補爬「審核中 (reviewing)」與其他頁籤並去重合併
     try {
       const [scriptRes] = await chrome.scripting.executeScript({
         target: { tabId: sellerTab.id },
         func: async () => {
-          const items = []
-          const nameSet = new Set()
-          let liveCount = 0
-          let reviewCount = 0
-
-          function collectDOM() {
-            for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
-              const href = a.getAttribute('href') || ''
-              if (!/\/portal\/product\/\d+/.test(href)) continue
-              const name = a.textContent.trim()
-              if (!name || nameSet.has(name)) continue
-              nameSet.add(name)
-              const idMatch = href.match(/\/portal\/product\/(\d+)/)
-              items.push({ name, productId: idMatch ? idMatch[1] : '' })
-            }
-          }
-
+          const apiItems = []
           const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-          // API 全量爬取多個 list_type 頁籤 (live_all 架上, reviewing 審核中, unpublished 未上架, violation 違規/刪除)
-          const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
+          const listTypes = ['reviewing', 'unpublished', 'violation', 'banned']
           for (const lt of listTypes) {
             try {
               const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
               if (r.ok) {
-                const list = (await r.json())?.data?.products || []
-                if (lt === 'live_all') liveCount += list.length
-                else reviewCount += list.length
-
+                const list = (await r.json())?.data?.products || (await r.json())?.data?.product_list || []
                 for (const p of list) {
                   const n = (p.name || '').trim()
-                  if (n && !nameSet.has(n)) {
-                    nameSet.add(n)
-                    items.push({ name: n, productId: String(p.id || ''), status: lt })
-                  }
+                  if (n) apiItems.push({ name: n, productId: String(p.id || ''), status: lt })
                 }
               }
             } catch (e) {}
           }
-
-          // 若 API 爬取成功，傳回包含多頁籤數據
-          if (items.length > 0) {
-            return { items, liveCount, reviewCount }
-          }
-
-          // 若 API 失敗，降級為 DOM 掃描
-          collectDOM()
-          return { items, liveCount: items.length, reviewCount: 0 }
+          return apiItems
         }
       })
 
-      if (scriptRes && scriptRes.result) {
-        const res = scriptRes.result
-        if (Array.isArray(res)) products = res
-        else if (res.items) {
-          products = res.items
-          products.meta = { liveCount: res.liveCount, reviewCount: res.reviewCount }
+      if (scriptRes && scriptRes.result && Array.isArray(scriptRes.result)) {
+        for (const item of scriptRes.result) {
+          const n = (item.name || '').trim()
+          if (n && !nameSet.has(n)) {
+            nameSet.add(n)
+            products.push(item)
+            reviewCount++
+          }
         }
       }
     } catch (e) {
-      console.warn('[SGC] Priority executeScript failed, using sendMessage fallback:', e.message)
+      console.warn('[SGC] API reviewing scan failed:', e.message)
     }
 
-    // 2. 備用方案：若 executeScript 失敗，再試 sendMessage 通訊
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      try {
-        products = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
-      } catch (e) {
-        console.error('[SGC] sendMessage fallback also failed:', e.message)
-      }
-    }
-
-    if (!products || !Array.isArray(products)) {
+    if (!products || products.length === 0) {
       throw new Error('無法與蝦皮分頁建立通訊，請至蝦皮「我的商品」頁面按 F5 重新整理後重試。')
     }
 
-    const liveC = products.meta?.liveCount ?? products.length
-    const reviewC = products.meta?.reviewCount ?? 0
-    if (reviewC > 0) {
-      log(`掃描取得 ${products.length} 筆已上架商品 (${liveC} 筆架上 + ${reviewC} 筆審核中/其他)`, 'ok')
+    if (reviewCount > 0) {
+      log(`掃描取得 ${products.length} 筆已上架商品 (${liveCount} 筆架上 + ${reviewCount} 筆審核中/其他)`, 'ok')
     } else {
       log(`掃描取得 ${products.length} 筆已上架商品`, products.length > 0 ? 'ok' : 'info')
     }
-    state.existingNames = new Set(products.map(p => p.name))
+    state.existingNames = nameSet
     if (state.catalog.length > 0) {
       state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
       $('scanInfo').textContent = '✅ 已上架 ' + products.length + ' 筆  待上傳 ' + state.pending.length + ' 筆'
