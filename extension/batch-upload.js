@@ -1,3 +1,16 @@
+// 例外：config 載入失敗屬於非核心功能（硬體檢測連結）的降級，
+// 不影響上架主流程，故此處刻意允許 fallback，不適用「禁止功能降級」的一般原則
+function isConfigReady(config) {
+  if (!config || typeof config.hardware_check_url !== 'string' || !config.hardware_check_url.trim()) return false
+  if (!config.description_footer || typeof config.description_footer.hardware_check_label !== 'string' || !config.description_footer.hardware_check_label.trim()) return false
+  try { return new URL(config.hardware_check_url).protocol === 'https:' } catch { return false }
+}
+
+const isConfigValid = (typeof SGC_CONFIG !== 'undefined') && isConfigReady(SGC_CONFIG)
+if (!isConfigValid) {
+  console.warn('[SGC] config.js 未定義或內容無效，已降級使用空設定（不影響上架主流程，僅不輸出硬體檢測連結）')
+}
+
 // ── 狀態 ──
 const state = {
   catalog: [],
@@ -6,12 +19,19 @@ const state = {
   results: [],
   isRunning: false,
   shouldStop: false,
+  config: isConfigValid ? SGC_CONFIG : {},
 }
 
 // ── DOM ──
 const $ = id => document.getElementById(id)
 
 // ── 工具函數 ──
+function stripHashtag(str) {
+  if (!str) return ''
+  const idx = str.indexOf(' #')
+  return (idx >= 0 ? str.substring(0, idx) : str).trim()
+}
+
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
 }
@@ -76,20 +96,92 @@ async function scanProducts() {
     let reviewCount = 0
 
     // 1. 第一步：先透過 sendMessage 取得穩定的架上 DOM 商品
+    let domItems = null
     try {
-      const domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
-      if (Array.isArray(domItems)) {
-        for (const item of domItems) {
-          const n = stripHashtag((item.name || '').trim())
-          if (n && !nameSet.has(n)) {
-            nameSet.add(n)
-            products.push({ ...item, name: n, status: 'live' })
-            liveCount++
+      domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
+    } catch (e) {
+      console.warn('[SGC] DOM sendMessage scan failed, using executeScript fallback:', e.message)
+    }
+
+    if (!Array.isArray(domItems) || domItems.length === 0) {
+      try {
+        const [scriptRes] = await chrome.scripting.executeScript({
+          target: { tabId: sellerTab.id },
+          func: async () => {
+            const items = []
+            const nameSet = new Set()
+
+            function collectDOM() {
+              for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
+                const href = a.getAttribute('href') || ''
+                if (!/\/portal\/product\/\d+/.test(href)) continue
+                const name = a.textContent.trim()
+                if (!name || nameSet.has(name)) continue
+                nameSet.add(name)
+                const idMatch = href.match(/\/portal\/product\/(\d+)/)
+                items.push({ name, productId: idMatch ? idMatch[1] : '' })
+              }
+            }
+            function readTotal() {
+              const t = document.body?.textContent || ''
+              const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
+              return m ? parseInt(m[1]) : 0
+            }
+            function clickNext() {
+              for (const s of ['.eds-pager__button-next','[class*="pager"] [class*="next"]','.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
+                const e = document.querySelector(s)
+                if (!e) continue
+                if (e.disabled||e.classList.contains('disabled')||e.getAttribute('aria-disabled')==='true') return false
+                e.click(); return true
+              }
+              return false
+            }
+            function waitTable(t) {
+              const tb = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
+              if (!tb) return new Promise(r=>setTimeout(r,2000))
+              return new Promise(r=>{let l=tb.innerHTML;const o=new MutationObserver(()=>{if(tb.innerHTML!==l){o.disconnect();setTimeout(r,400)}});o.observe(tb,{childList:true,subtree:true});setTimeout(()=>{o.disconnect();r()},t||6000)})
+            }
+
+            const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
+            try {
+              const r = await fetch('/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS='+encodeURIComponent(cds)+'&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false',{credentials:'include'})
+              if (r.ok) {
+                const list = (await r.json())?.data?.products||[]
+                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}}
+              }
+            } catch(e) {}
+
+            collectDOM()
+            let cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
+            const MAX=50; let visited=0
+            while (visited<MAX) {
+              if (!clickNext()) break
+              await waitTable()
+              const prev=items.length; collectDOM(); visited++
+              cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
+              if (items.length===prev) break
+              const t=readTotal(); if(t>0&&items.length>=t) break
+            }
+            return items
           }
+        })
+        if (scriptRes && scriptRes.result && Array.isArray(scriptRes.result)) {
+          domItems = scriptRes.result
+        }
+      } catch (e) {
+        console.warn('[SGC] ExecuteScript DOM fallback failed:', e.message)
+      }
+    }
+
+    if (Array.isArray(domItems)) {
+      for (const item of domItems) {
+        const n = stripHashtag((item.name || '').trim())
+        if (n && !nameSet.has(n)) {
+          nameSet.add(n)
+          products.push({ ...item, name: n, status: 'live' })
+          liveCount++
         }
       }
-    } catch (e) {
-      console.warn('[SGC] DOM sendMessage scan failed:', e.message)
     }
 
     // 2. 第二步：使用 executeScript 直注入 API 爬取 reviewing, unpublished, violation, banned 等頁籤
