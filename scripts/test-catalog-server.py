@@ -192,10 +192,12 @@ check("install 腳本含 ExtensionId 參數", "ExtensionId" in install_script.re
 # ── Step 4: 驗證新增功能（022 spec） ──
 print("\n=== 4. 驗證新增功能（批量上傳與多帳號） ===\n")
 
-content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
-check("content.js 含 extractSellerProductList", "function extractSellerProductList" in content_js)
-check("content.js 含 postMessage handler", "addEventListener('message'" in content_js or "addEventListener(\"message\"" in content_js)
-check("content.js 含 saveRawProductData 發送", "saveRawProductData" in content_js)
+seller_list_js = (BASE / "extension" / "lib" / "seller-list.js").read_text(encoding="utf-8")
+check("seller-list.js 含 extractSellerProductList", "function extractSellerProductList" in seller_list_js)
+boot_js = (BASE / "extension" / "content-boot.js").read_text(encoding="utf-8")
+check("content-boot.js 含 postMessage handler", "addEventListener('message'" in boot_js or "addEventListener(\"message\"" in boot_js)
+extractor_js = (BASE / "extension" / "lib" / "extractor.js").read_text(encoding="utf-8")
+check("extractor.js 含 saveRawProductData 發送", "saveRawProductData" in extractor_js)
 
 bg_js = (BASE / "extension" / "background.js").read_text(encoding="utf-8")
 check("background.js 含 saveRawProductData 處理", "action === 'saveRawProductData'" in bg_js or "action === \"saveRawProductData\"" in bg_js)
@@ -225,9 +227,9 @@ popup_js = (BASE / "extension" / "popup.js").read_text(encoding="utf-8")
 check("popup.js 下載按鈕使用 saveRawProductData", "saveRawProductData" in popup_js)
 check("popup.js 已無舊 download action", "action: 'download'" not in popup_js and "action: \"download\"" not in popup_js)
 
-content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
-check("content.js 含 shop_name 提取", "shop_name" in content_js)
-check("content.js shop_name 從 __INITIAL_STATE__ 提取", "account?.username" in content_js or "account.username" in content_js)
+extractor_js = (BASE / "extension" / "lib" / "extractor.js").read_text(encoding="utf-8")
+check("extractor.js 含 shop_name 提取", "shop_name" in extractor_js)
+check("extractor.js shop_name 從 __INITIAL_STATE__ 提取", "account?.username" in extractor_js or "account.username" in extractor_js)
 
 server_py = (BASE / "scripts" / "local-catalog-server.py").read_text(encoding="utf-8")
 check("伺服器路徑含 shop_name", "shop_name" in server_py)
@@ -237,10 +239,11 @@ check("伺服器 RAW_DATA_PATH 不含 mazz68", "E:/proj/shopee/mazz68" not in se
 # ── Step 6: 驗證批次上傳功能 ──
 print("\n=== 6. 驗證批次上傳功能 ===\n")
 
-content_js = (BASE / "extension" / "content.js").read_text(encoding="utf-8")
-check("content.js 含 checkSaveButton", "checkSaveButton" in content_js)
-check("content.js 含 clickSaveButton", "clickSaveButton" in content_js)
-check("content.js 用 Array.from 取代 contains", "Array.from(btns).find" in content_js)
+boot_js = (BASE / "extension" / "content-boot.js").read_text(encoding="utf-8")
+check("content-boot.js 含 checkSaveButton action", "checkSaveButton" in boot_js)
+check("content-boot.js 含 clickSaveButton action", "clickSaveButton" in boot_js)
+seller_fill_js = (BASE / "extension" / "lib" / "seller-fill.js").read_text(encoding="utf-8")
+check("seller-fill.js 含 findMainSaveButton", "function findMainSaveButton" in seller_fill_js)
 
 popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
 check("popup.html 含 btnBatchUpload", "btnBatchUpload" in popup_html)
@@ -259,9 +262,9 @@ check("batch-upload.js 含 fillAndSave", "fillAndSave" in batch_js_text)
 check("batch-upload.js 含 checkSaveButton", "checkSaveButton" in batch_js_text)
 check("batch-upload.js 含 clickSaveButton", "clickSaveButton" in batch_js_text)
 
-batch_test_html = (BASE / "extension" / "batch-upload-test.html")
-check("batch-upload-test.html 存在", batch_test_html.exists())
-check("batch-upload-test.html 含 ping", "ping" in batch_test_html.read_text(encoding="utf-8"))
+batch_test_js = (BASE / "extension" / "batch-upload-test.js")
+check("batch-upload-test.js 存在", batch_test_js.exists())
+check("batch-upload-test.js 含 ping", "ping" in batch_test_js.read_text(encoding="utf-8"))
 
 popup_html = (BASE / "extension" / "popup.html").read_text(encoding="utf-8")
 check("popup.html 含 btnBatchTest", "btnBatchTest" in popup_html)

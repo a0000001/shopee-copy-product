@@ -12,7 +12,13 @@ shopee-copy-product/
 ├── extension/                    # 打包上架用（zip 這個資料夾）
 │   ├── manifest.json             # MV3 宣告、權限、content script 設定
 │   ├── background.js             # Service Worker
-│   ├── content.js                # Content Script（頁面資料擷取 + 賣家頁填入）
+│   ├── content-boot.js           # Content Script 入口（message handlers，透過 __SGC namespace 呼叫各模組）
+│   ├── lib/
+│   │   ├── _shared.js            # 共用元件：namespace、dedupe、cleanDescription、resolveImgUrl
+│   │   ├── extractor.js          # 商品頁(PDP) 多來源資料擷取
+│   │   ├── seller-fill.js        # 賣家頁(seller) 表單填寫引擎
+│   │   ├── seller-list.js        # 賣家商品列表 DOM 爬取
+│   │   └── media.js              # 媒體下載與上傳
 │   ├── popup.html                # 彈出視窗 UI
 │   ├── popup.js                  # 彈出視窗邏輯
 │   └── icon{16,32,48,128}.png   # 圖示一整套
@@ -53,15 +59,15 @@ shopee-copy-product/
 ## 三層通訊架構
 
 ```
-┌──────────────┐     chrome.tabs.sendMessage     ┌──────────────┐
-│   popup.js   │ ──────────────────────────────>  │  content.js  │
-│  (popup UI)  │ <──────────────────────────────  │ (頁面上下文) │
-└──────┬───────┘    回傳 ProductData               └──────┬───────┘
-       │                                                  │
-       │ chrome.runtime.sendMessage                       │
-       ▼                                                  │
-┌──────────────┐                                          │
-│ background.js │  <───────────────────────────────────────┘
+┌──────────────┐     chrome.tabs.sendMessage     ┌───────────────────┐
+│   popup.js   │ ──────────────────────────────>  │  content-boot.js  │
+│  (popup UI)  │ <──────────────────────────────  │  ┌─ lib/_shared.js│
+└──────┬───────┘    回傳 ProductData               │  ├─ extractor.js  │
+       │                                          │  ├─ seller-fill.js│
+       │ chrome.runtime.sendMessage               │  ├─ seller-list.js│
+       ▼                                          │  └─ media.js      │
+┌──────────────┐                                   │ (頁面上下文)       │
+│ background.js │  <───────────────────────────────┘
 │ (SW)          │  chrome.runtime.onMessage (download)
 └──────────────┘
 ```
@@ -71,7 +77,10 @@ shopee-copy-product/
 | 組件 | 檔案 | 職責 |
 |------|------|------|
 | Popup | popup.html + popup.js | 顯示擷取結果、觸發複製與下載、雙模式路由（shopee.tw=擷取 / seller.shopee.tw=填入） |
-| Content Script | content.js | 注入商品頁(PDP)：多來源擷取商品資料；注入賣家頁(seller)：填入表單欄位 |
+| Content Script（入口） | content-boot.js | Chrome runtime message + window.postMessage 處理，所有功能透過 `__SGC.xxx()` 委派各 lib 模組 |
+| Content Script（資料擷取） | lib/extractor.js | 注入商品頁(PDP)：五來源多層備援擷取商品資料 |
+| Content Script（表單填寫） | lib/seller-fill.js, lib/media.js | 注入賣家頁(seller)：填入表單欄位、上傳圖片影片 |
+| Content Script（列表爬取） | lib/seller-list.js | 注入賣家頁(seller)：從商品列表頁 DOM/API 爬取已上架 SKU |
 | Service Worker | background.js | 右鍵 context menu、批次下載（OffscreenCanvas JPG 轉換） |
 | Manifest | manifest.json | MV3 宣告、權限、content_scripts matches |
 
@@ -140,7 +149,7 @@ MV3 Service Worker 不支援 `URL.createObjectURL`。改用 `ArrayBuffer` + `bto
 
 ### 要改圖片/影片擷取邏輯
 
-→ 改 `extension/content.js` 的 `extractFromDOM()` / `extractProductData()`
+→ 改 `extension/lib/extractor.js` 的 `extractFromDOM()` / `extractProductData()`
 
 ### 要改下載邏輯
 
@@ -148,7 +157,15 @@ MV3 Service Worker 不支援 `URL.createObjectURL`。改用 `ArrayBuffer` + `bto
 
 ### 要改賣家頁填入邏輯
 
-→ 改 `extension/content.js` 的 `fillProductData()` / `fillAll()` / `findFieldByLabel()`
+→ 改 `extension/lib/seller-fill.js` 的 `fillAll()` / `findFieldByLabel()`、`extension/lib/media.js` 的上傳邏輯
+
+### 要改商品列表爬取邏輯
+
+→ 改 `extension/lib/seller-list.js` 的 `extractSellerProductList()` / `readPageInfo()`
+
+### 要改 message handler 或新增動作
+
+→ 改 `extension/content-boot.js`
 
 ### 要改 popup UI
 

@@ -37,7 +37,12 @@
         "https://seller.shopee.tw/*"
       ],
       "js": [
-        "content.js"
+        "lib/_shared.js",
+        "lib/extractor.js",
+        "lib/seller-fill.js",
+        "lib/seller-list.js",
+        "lib/media.js",
+        "content-boot.js"
       ],
       "run_at": "document_idle"
     }

@@ -4,6 +4,18 @@
 
 ## 2026-07-23
 
+### 重構與修復：content.js 模組化拆分為 6 元件（030 spec）與賣家商品清單全量翻頁修復
+
+- `extension/content.js` — 重新命名為 `content.js.bak`。原 73.9KB / 1764 行單一 IIFE 拆解為 6 個獨立檔案，透過 manifest `js` array 載入，共用 `window.__SGC` namespace。
+- `extension/lib/_shared.js` — ✨ **新增：共用元件**。IIFE 包裹，初始化 `window.__SGC` namespace，含 `dedupe()`、`cleanDescription()`、`resolveImgUrl()`、`SHOPEE_IMG_DOMAIN`。
+- `extension/lib/extractor.js` — ✨ **新增：商品頁資料擷取**。IIFE 包裹，含 `extractFromScripts()`、`extractFromDOM()`、`extractFromAPI()`、`triggerCarouselFullRender()` 等；跨檔案呼叫 `__SGC.cleanDescription()`、`__SGC.resolveImgUrl()`、`__SGC.dedupe()`、`__SGC.SHOPEE_IMG_DOMAIN`。
+- `extension/lib/seller-fill.js` — ✨ **新增：賣家頁表單填寫**。IIFE 包裹，含 `fillAll()`、`fillFieldAsync()`、`fillCategoryAsync()`、`fillBrandAsync()`、`randomJitter()` 等；跨檔案呼叫 `__SGC.uploadMediaAsync()`。`findMainSaveButton()` 從原巢狀 `onMessage` callback 提升至頂層。
+- `extension/lib/media.js` — ✨ **新增：媒體下載與上傳**。IIFE 包裹，含 `downloadMediaAsFile()`、`uploadMediaAsync()`，由 seller-fill 透過 `__SGC.uploadMediaAsync()` 呼叫。
+- `extension/lib/seller-list.js` — ✨ **新增與修復：賣家商品列表擷取**。IIFE 包裹，含 `extractSellerProductList()`、`readPageInfo()`；🔥 **修復 SPA 翻頁提前中斷 Bug**：解決 API 預先載入 48 筆資料導致 DOM 第 2 頁新增 0 筆時觸發 `items.length === prev` premature break，確保 70 筆等全量商品成功收集完畢。
+- `extension/content-boot.js` — ✨ **新增：入口點**。IIFE 包裹，保留 `chrome.runtime.onMessage.addListener` 與 `window.addEventListener('message', ...)` 處理，所有函式呼叫改為 `__SGC.xxx()` 前綴（共 10 處跨檔案存取）。
+- `extension/manifest.json` — `content_scripts[0].js` 由 `["content.js"]` 變更為 `["lib/_shared.js", "lib/extractor.js", "lib/seller-fill.js", "lib/seller-list.js", "lib/media.js", "content-boot.js"]`，確保 IIFE 執行順序。
+- `docs/spec/030-plan-content.js拆分重構方案（content_js_split）.md` — 更新開發文件，同步 Claude Web 審計回饋（IIFE 包裝一致化、跨檔案存取清單、巢狀提升陷阱等）。
+
 ### 修復：全量頁籤商品掃描 (35 架上 + 3 審核中 = 38 筆) 與直注入發布判定 (026-04 spec)
 
 - `extension/batch-upload.js` — 🔥 **實作全量頁籤商品雙重掃描**：採用 DOM 安定掃描 (安定取得 35 筆架上商品) + `executeScript` 補充 API 爬取 (`reviewing` 審核中 3 筆) 雙重合併去重機制。已成功將全量 38 筆納入防重複上架比對；顯示細節文字「38 筆 (35 筆已上架 + 3 筆審核中)」因多次修復未果決定保持現狀（顯示 38 筆已上架），不再進行 UI 文字修改。
