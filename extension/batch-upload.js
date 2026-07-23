@@ -333,7 +333,7 @@ async function fillAndSaveSingle(item, tabId) {
   chrome.tabs.onUpdated.addListener(onUpdated)
 
   try {
-    const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
+    const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, _config: state.config, skipMedia: true } })
     if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
     sawRunning = true
 

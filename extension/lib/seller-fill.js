@@ -519,9 +519,10 @@
         if (cs.power) desc += '• 電源：' + cs.power + '\n'
       }
 
-      if (config && config.hardware_check_url) {
-        const hwLabel = config?.description_footer?.hardware_check_label || '硬體需求檢測'
-        desc += `\n${hwLabel}：${config.hardware_check_url}\n`
+      const activeConfig = config || product._config || (typeof SGC_CONFIG !== 'undefined' ? SGC_CONFIG : null)
+      if (activeConfig && activeConfig.hardware_check_url) {
+        const hwLabel = activeConfig?.description_footer?.hardware_check_label || '進階電腦檢測工具跟更多好物 👉 傳送門'
+        desc += `\n\n${hwLabel}：${activeConfig.hardware_check_url}\n`
       }
 
       const safeCategory = product.category || '其他'
