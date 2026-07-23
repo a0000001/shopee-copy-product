@@ -836,6 +836,13 @@
       return { ok: false, error: '類別選擇選單未顯示' }
     }
 
+    // 類別 ID 對照表 (常見類別 ID 轉中文路徑映射)
+    const categoryMap = {
+      '100644,101937': ['電腦與周邊配件', '軟體'],
+      '100644': ['電腦與周邊配件'],
+      '101937': ['軟體'],
+    }
+
     // 動態解構類別名稱
     let categoryConfig = { mode: 'fallback', path: ['電腦與周邊配件', '軟體'] }
     const categoryRaw = data.category || data.ps_category || ''
@@ -843,8 +850,14 @@
       if (categoryRaw.includes('>')) {
         categoryConfig = { mode: 'path', path: categoryRaw.split('>').map(s => s.trim()) }
       } else if (/^[\d,]+$/.test(categoryRaw.trim())) {
-        categoryConfig = { mode: 'id', ids: categoryRaw.split(',').map(s => s.trim()) }
-        console.log('[SGC] ps_category is ID format, target IDs:', categoryConfig.ids)
+        const cleanId = categoryRaw.trim()
+        if (categoryMap[cleanId]) {
+          categoryConfig = { mode: 'path', path: categoryMap[cleanId] }
+          console.log('[SGC] Mapped category IDs to path via lookup table:', cleanId, '->', categoryMap[cleanId])
+        } else {
+          categoryConfig = { mode: 'id', ids: cleanId.split(',').map(s => s.trim()) }
+          console.log('[SGC] ps_category is ID format (unmapped), target IDs:', categoryConfig.ids)
+        }
       }
     } else if (Array.isArray(data.categoryPath)) {
       categoryConfig = { mode: 'path', path: data.categoryPath }
