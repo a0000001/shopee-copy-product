@@ -1,7 +1,7 @@
 # 027 — Plan: 類別選取與 SPA 導航 Context 銷毀修復計畫
 
 > 本文件記錄二刷診斷後的真實根因、修復方案及驗證計畫。
-> 已將 Claude Web 的最新審核與程式碼事實校對完畢，排除假修復與靜默選錯類別問題，並整合單件測試 23/23 項成功的黃金對照日誌。
+> 已將 Claude Web 的最新審核、程式碼事實校對與**Auto-Resume 導航自動續傳機制 (含 60s 時間預算硬邊界、連續導航上限、URL 權限檢查)** 完整對齊整合。
 
 ---
 
@@ -44,27 +44,36 @@
 
 ---
 
-### 根因 2 (硬傷)：ID 格式類別 (如 "100644,101937") 匹配機制與嚴格報錯
+### 根因 2 (硬傷)：ID 格式類別 (如 "100644,101937") 匹配機制與對照表
 
 - **原設計漏洞**：
-  - 若 ID 比對失敗直接 Fallback 至固定類別（如「電腦與周邊配件 > 軟體」），會導致非電腦軟體類商品被靜默選成錯誤類別，屬性欄位對不上，儲存按鈕永遠不會 Ready。
+  - 蝦皮賣家中心選單 HTML 節點完全沒有 `data-id` 屬性，直接用數字 ID 搜尋會觸發 Error 中止流程。
 - **正解規則**：
-  - 嚴格區分文字路徑 mode 與 ID 匹配 mode。
-  - 當 ID 比對失敗時，**禁止靜默 fallback 至固定類別**，必須明確 `throw new Error(...)`，將錯誤記錄於批次報告中。
+  - 引入 `categoryMap` 映射表（`100644,101937` -> `['電腦與周邊配件', '軟體']`）。
+  - 當 ID 比對失敗時，顯式拋出 `throw new Error(...)` 錯誤，將狀況紀錄於報告中，不靜默選錯類別。
 
 ---
 
-## 三、 精確修復方案 (Proposed Changes)
+## 三、 擬定修復方案 (Proposed Changes)
 
-### Component 1: `batch-upload.js` 加入 Tab 導航監聽 (修復點 A)
+### Component 1: `batch-upload.js` Auto-Resume 導航自動續傳 (修復點 A)
 
 #### [MODIFY] [batch-upload.js](file:///S:/projects/shopee-copy-product/extension/batch-upload.js)
 - 利用 `chrome.tabs.onUpdated` 監聽指定 `tabId` 的 `status === 'loading'`。
-- 當在 `fillProductData` 執行期間（`sawRunning === true`）偵測到導航時，立即拋出 `偵測到分頁於文字填寫期間發生導航，content script 狀態已遺失`，避免死等 45 秒。
+- 當在 `fillProductData` 執行期間（`sawRunning === true`）偵測到導航時：
+  1. 累計 `navRetryCount`，若連續導航 > 2 次則主動中止抛錯。
+  2. 使用 `OVERALL_DEADLINE_MS = 60000` (60s) 硬邊界控管整體填寫時間。
+  3. `await waitForTabReady(tabId)` 等待新 document 的 content script 載入。
+  4. 驗證 URL 包含 `/\/portal\/product\/(new|edit)/` 防範登入過期跳轉。
+  5. 對新 Content Script 自動發送 `fillProductData` 進行 **Auto-Resume 自動續傳**！
 
 ```javascript
 // 修改 extension/batch-upload.js fillAndSaveSingle
 async function fillAndSaveSingle(item, tabId) {
+  const OVERALL_DEADLINE_MS = 60000
+  const MAX_NAV_RETRIES = 2
+  const startedAt = Date.now()
+  let navRetryCount = 0
   let sawRunning = false
   let navigationDetected = false
 
@@ -78,96 +87,80 @@ async function fillAndSaveSingle(item, tabId) {
   try {
     const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
     if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
+    sawRunning = true
 
     let fillDone = false
     for (let i = 0; i < 150; i++) {
-      await sleep(300)
-      if (navigationDetected) {
-        throw new Error('偵測到分頁於文字填寫期間發生導航，content script 狀態已遺失')
+      const elapsed = Date.now() - startedAt
+      if (elapsed > OVERALL_DEADLINE_MS) {
+        throw new Error(`文字填寫總耗時超過 ${(elapsed / 1000).toFixed(1)}s，判定異常超時`)
       }
+      await sleep(300)
+
+      if (navigationDetected) {
+        navRetryCount++
+        if (navRetryCount > MAX_NAV_RETRIES) {
+          throw new Error(`連續偵測到 ${navRetryCount} 次導航，判定為異常頁面狀態（可能登入過期或環境異常），停止續傳`)
+        }
+        console.warn(`[SGC] 偵測到真實導航（第 ${navRetryCount} 次），等待新頁面穩定後自動續傳`)
+        await waitForTabReady(tabId)
+        
+        const tabInfo = await chrome.tabs.get(tabId)
+        if (!/\/portal\/product\/(new|edit)/.test(tabInfo.url || '')) {
+          throw new Error(`導航後分頁不在預期的商品編輯頁（實際: ${tabInfo.url}），可能登入已過期`)
+        }
+
+        await sleep(800)
+        navigationDetected = false
+        sawRunning = false
+
+        const retryStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
+        if (!retryStart || !retryStart.ok) throw new Error('導航後重新啟動文字填寫失敗')
+        sawRunning = true
+        continue
+      }
+
       try {
         const st = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
-        if (st && st.status === 'running') sawRunning = true
         if (st && st.status === 'done') {
           if (st.result && st.result.ok) { fillDone = true; break }
           else throw new Error((st.result && st.result.error) || '文字填寫失敗')
         }
       } catch (e) {
-        if (e.message.includes('文字填寫失敗') || e.message.includes('偵測到分頁')) throw e
+        if (e.message.includes('文字填寫失敗')) throw e
       }
     }
-    if (!fillDone) throw new Error('文字填寫超時 (45s)')
+    if (!fillDone) throw new Error(`文字填寫超時 (${((Date.now() - startedAt) / 1000).toFixed(1)}s)`)
   } finally {
     chrome.tabs.onUpdated.removeListener(onUpdated)
   }
-  // 後續邏輯保持不變...
 }
 ```
 
 ---
 
-### Component 2: `content.js` 類別 ID 結構化匹配與顯式報錯 (修復點 B)
+### Component 2: `content.js` 類別 ID 對照表與顯式報錯 (修復點 B)
 
 #### [MODIFY] [content.js](file:///S:/projects/shopee-copy-product/extension/content.js)
-- 在 `fillCategoryAsync` 解析 `categoryRaw` 時，區分 `{ mode: 'path', path: [...] }` 與 `{ mode: 'id', ids: [...] }`。
-- 修改 `while (colIdx < maxLevels)` 迴圈，同步分支處理 ID 模式：
-
-```javascript
-// 修改 extension/content.js fillCategoryAsync
-let categoryConfig = { mode: 'fallback', path: ['電腦與周邊配件', '軟體'] }
-const categoryRaw = data.category || data.ps_category || ''
-if (categoryRaw && typeof categoryRaw === 'string') {
-  if (categoryRaw.includes('>')) {
-    categoryConfig = { mode: 'path', path: categoryRaw.split('>').map(s => s.trim()) }
-  } else if (/^[\d,]+$/.test(categoryRaw.trim())) {
-    categoryConfig = { mode: 'id', ids: categoryRaw.split(',').map(s => s.trim()) }
-  }
-}
-
-// 在迴圈中分支處理
-while (colIdx < maxLevels) {
-  // ...尋找列 DOM (col) 邏輯...
-  const items = col.querySelectorAll('.category-item, [class*="category-item"], li')
-  if (items.length === 0) break
-
-  let targetItem = null
-  if (categoryConfig.mode === 'id') {
-    const targetId = categoryConfig.ids[colIdx]
-    if (targetId) {
-      targetItem = Array.from(items).find(el => {
-        const idAttr = el.getAttribute('data-id') || el.getAttribute('data-category-id') || el.getAttribute('value') || el.dataset?.id || el.dataset?.categoryId
-        return idAttr && String(idAttr).trim() === targetId
-      })
-    }
-    if (!targetId && colIdx >= categoryConfig.ids.length) break // 到了葉節點
-    if (!targetItem) {
-      throw new Error(`類別 ID ${targetId} 在第 ${colIdx} 層選單中找不到對應 DOM 選項`)
-    }
-  } else {
-    // 原本文字路徑/Fallback 選取邏輯...
-  }
-
-  // 點擊 targetItem...
-  colIdx++
-}
-```
+- 在 `fillCategoryAsync` 中新增 `categoryMap` 對照表，精確將 `100644,101937` 解析為 `['電腦與周邊配件', '軟體']`。
 
 ---
 
-### Component 3: `batch-upload.html` / `batch-upload.js` 複製診斷紀錄增強 (體驗優化)
+### Component 3: `batch-upload.html` 複製診斷紀錄增強 (體驗優化)
 
 #### [MODIFY] [batch-upload.js](file:///S:/projects/shopee-copy-product/extension/batch-upload.js)
-- 按下「複製錯誤訊息」時，複製完整時間戳記、統計數據與 `logContainer` 文字。
+- 按下「複製錯誤訊息」時，複製完整時間戳記、統計與 `logContainer` 文字。
 
 ---
 
 ## 四、 執行任務與驗證計畫 (Tasks & Verification Plan)
 
 ### Tasks
-- [ ] **Task 1**: 修改 `batch-upload.js` 加入 `chrome.tabs.onUpdated` 導航偵測 (修復點 A)。
-- [ ] **Task 2**: 修改 `content.js` 實現結構化類別 ID 匹配與顯式報錯機制 (修復點 B)。
-- [ ] **Task 3**: 增強 `batch-upload.html` / `batch-upload.js` 之錯誤複製細節。
+- [x] **Task 1**: 更新 `docs/spec/027-plan-類別選取破口與實際上架通訊超時修復分析.md`。
+- [ ] **Task 2**: 修改 `batch-upload.js` 套用 Auto-Resume 自動續傳與全域時間邊界機制。
+- [ ] **Task 3**: 修改 `content.js` 補強 `categoryMap`。
+- [ ] **Task 4**: 執行批次上傳實測並觀察 4 大診斷重點（導航觸發、單筆耗時、連續導航次數、URL 正則放行）。
 
-### Automated & Manual Verification
-- **Smoke Test 1**: 執行 `batch-upload-test.js` 單件測試，確認 23 項斷言仍然全部通過。
-- **Smoke Test 2**: 觸發 `batch-upload.js` 批次上傳，驗證若發生導航時能於數百毫秒內捕捉到明確錯誤，且不再耗滿 45 秒。
+### Real-world Batch Test Verification
+1. 觀察 Log 視窗是否有出現 `[SGC] 偵測到真實導航` 與 Auto-Resume 續傳日誌。
+2. 檢查文字填寫完成時顯示之實際秒數。

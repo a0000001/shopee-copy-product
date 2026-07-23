@@ -211,6 +211,10 @@ scanProducts()
 
 // ── 步驟 3：兩段式 Fire-and-Forget 上傳單件商品 ──
 async function fillAndSaveSingle(item, tabId) {
+  const OVERALL_DEADLINE_MS = 60000
+  const MAX_NAV_RETRIES = 2
+  const startedAt = Date.now()
+  let navRetryCount = 0
   let sawRunning = false
   let navigationDetected = false
 
@@ -222,29 +226,52 @@ async function fillAndSaveSingle(item, tabId) {
   chrome.tabs.onUpdated.addListener(onUpdated)
 
   try {
-    // 1. 第一段：文字填寫 (Fire-and-Forget, 跳過媒體上傳避免重複與超時)
     const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
     if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
+    sawRunning = true
 
-    // 輪詢等待文字填寫完成 (最多 45 秒)
     let fillDone = false
     for (let i = 0; i < 150; i++) {
-      await sleep(300)
-      if (navigationDetected) {
-        throw new Error('偵測到分頁於文字填寫期間發生導航/重新載入，content script 狀態已遺失')
+      const elapsed = Date.now() - startedAt
+      if (elapsed > OVERALL_DEADLINE_MS) {
+        throw new Error(`文字填寫總耗時超過 ${(elapsed / 1000).toFixed(1)}s，判定異常超時`)
       }
+      await sleep(300)
+
+      if (navigationDetected) {
+        navRetryCount++
+        if (navRetryCount > MAX_NAV_RETRIES) {
+          throw new Error(`連續偵測到 ${navRetryCount} 次導航，判定為異常頁面狀態（可能登入過期或環境異常），停止續傳`)
+        }
+        console.warn(`[SGC] 偵測到真實導航（第 ${navRetryCount} 次），等待新頁面穩定後自動續傳`)
+        await waitForTabReady(tabId)
+        
+        const tabInfo = await chrome.tabs.get(tabId)
+        if (!/\/portal\/product\/(new|edit)/.test(tabInfo.url || '')) {
+          throw new Error(`導航後分頁不在預期的商品編輯頁（實際: ${tabInfo.url}），可能登入已過期`)
+        }
+
+        await sleep(800)
+        navigationDetected = false
+        sawRunning = false
+
+        const retryStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
+        if (!retryStart || !retryStart.ok) throw new Error('導航後重新啟動文字填寫失敗')
+        sawRunning = true
+        continue
+      }
+
       try {
         const st = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
-        if (st && st.status === 'running') sawRunning = true
         if (st && st.status === 'done') {
           if (st.result && st.result.ok) { fillDone = true; break }
           else throw new Error((st.result && st.result.error) || '文字填寫失敗')
         }
       } catch (e) {
-        if (e.message.includes('文字填寫失敗') || e.message.includes('偵測到分頁')) throw e
+        if (e.message.includes('文字填寫失敗')) throw e
       }
     }
-    if (!fillDone) throw new Error('文字填寫超時 (45s)')
+    if (!fillDone) throw new Error(`文字填寫超時 (${((Date.now() - startedAt) / 1000).toFixed(1)}s)`)
   } finally {
     chrome.tabs.onUpdated.removeListener(onUpdated)
   }
