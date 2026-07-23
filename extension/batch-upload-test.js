@@ -168,8 +168,27 @@ document.getElementById('btnTest').addEventListener('click', async () => {
           const nameInput = document.querySelector('[data-product-edit-field-unique-id="name"] input.eds-input__input, input[placeholder*="商品名稱"]')
           const descInput = document.querySelector('[data-product-edit-field-unique-id="description"] .ql-editor, textarea')
           const priceInput = document.querySelector('[data-product-edit-field-unique-id="price"] input.eds-input__input, input[placeholder*="價格"]')
-          const stockInput = document.querySelector('[data-product-edit-field-unique-id="stock"] input.eds-input__input, input[placeholder*="數量"]')
+          const stockInput =
+            document.querySelector('[data-product-edit-field-unique-id="stock"] input.eds-input__input') ||
+            document.querySelector('[data-product-edit-field-unique-id="stock"] input') ||
+            Array.from(document.querySelectorAll('input[placeholder*="數量"], input[placeholder*="庫存"], input')).find(el => {
+              const ph = el.getAttribute('placeholder') || ''
+              const rowText = el.closest('.edit-row, .product-edit-form-item, .ant-form-item, tr')?.textContent || ''
+              return (rowText.includes('數量') || rowText.includes('庫存') || ph.includes('庫存')) && !ph.includes('最低') && !rowText.includes('最低')
+            })
           const weightInput = document.querySelector('[data-product-edit-field-unique-id="weight"] input.eds-input__input, input[placeholder*="重量"]')
+
+          const allInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="file"])')).map(el => {
+            const container = el.closest('[data-product-edit-field-unique-id]')
+            const containerId = container?.getAttribute('data-product-edit-field-unique-id') || null
+            const label = el.closest('.edit-row, .product-edit-form-item, .ant-form-item')?.querySelector('.edit-label, label')?.textContent?.trim() || ''
+            return {
+              uniqueId: containerId,
+              label: label.replace(/[\s\n]+/g, ' ').substring(0, 15),
+              placeholder: el.placeholder || '',
+              value: el.value || ''
+            }
+          })
 
           return {
             name: nameInput?.value || null,
@@ -177,11 +196,15 @@ document.getElementById('btnTest').addEventListener('click', async () => {
             price: priceInput?.value || null,
             stock: stockInput?.value || null,
             weight: weightInput?.value || null,
+            allInputs
           }
         }
       })
       const dom = domCheck.result
-      log('   DOM 讀取結果: ' + JSON.stringify(dom), 'info')
+      log('   DOM 讀取結果: ' + JSON.stringify({ name: dom.name, desc: dom.desc?.substring(0, 20), price: dom.price, stock: dom.stock, weight: dom.weight }), 'info')
+      if (dom.allInputs) {
+        log('   🔍 DOM 所有文字 Input 診斷資料: ' + JSON.stringify(dom.allInputs), 'info')
+      }
       if (dom.name !== null) check(assertContains('商品名稱', dom.name, '測試商品專用'))
       if (dom.price !== null) check(assertContains('價格', dom.price, '1999'))
       if (dom.stock !== null) check(assert('數量', dom.stock, '999'))

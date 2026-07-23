@@ -635,19 +635,21 @@
 
   function findFieldByLabel(labelText) {
     const fieldIdMap = {
+      '最低購買數量': 'minpq',
+      '商品數量': 'stock',
       '商品名稱': 'name',
       '商品描述': 'description',
       '價格': 'price',
-      '商品數量': 'stock',
       '數量': 'stock',
       '庫存': 'stock',
-      '最低購買數量': 'minpq',
       '重量': 'weight',
       '主商品貨號': 'parentSku',
       '國際條碼': 'gtinCode',
     }
     const cleanLabel = labelText.trim().replace(/[\s*]+/g, '')
-    const fieldId = Object.entries(fieldIdMap).find(([k]) => cleanLabel.includes(k) || k.includes(cleanLabel))?.[1]
+    const fieldId = fieldIdMap[cleanLabel] || Object.entries(fieldIdMap)
+      .sort((a, b) => b[0].length - a[0].length)
+      .find(([k]) => cleanLabel.includes(k) || k.includes(cleanLabel))?.[1]
 
     if (fieldId) {
       const el = document.querySelector(
@@ -665,6 +667,9 @@
       const labelEl = row.querySelector('.edit-label span:not(.mandatory-icon), .edit-label .item-title, .edit-label')
       if (!labelEl) continue
       const text = (labelEl.textContent || '').trim().replace(/[\s*]+/g, '')
+      if ((cleanLabel === '數量' || cleanLabel === '商品數量' || cleanLabel === '庫存') && text.includes('最低')) {
+        continue
+      }
       if (text === cleanLabel || text.includes(cleanLabel) || cleanLabel.includes(text)) {
         const input = row.querySelector('input.eds-input__input:not([type="file"]), input:not([type="file"]), textarea.eds-input__input, textarea, [contenteditable="true"], .ql-editor')
         if (input) return input
@@ -674,6 +679,9 @@
     const labels = document.querySelectorAll('.ant-form-item-label label, label')
     for (const lb of labels) {
       const text = lb.textContent.trim().replace(/[\s*]+/g, '')
+      if ((cleanLabel === '數量' || cleanLabel === '商品數量' || cleanLabel === '庫存') && text.includes('最低')) {
+        continue
+      }
       if (text !== cleanLabel) continue
       const forId = lb.getAttribute('for')
       if (forId) { const el = document.getElementById(forId); if (el) return el }
@@ -1207,12 +1215,11 @@
     const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'
     results.push({
       field: '商品數量', ...(await fillFieldAsync(stockVal,
+        '[data-product-edit-field-unique-id="stock"] input.eds-input__input:not([type="file"])',
+        '[data-product-edit-field-unique-id="stock"] input:not([type="file"])',
         () => findFieldByLabel('商品數量'),
         () => findFieldByLabel('數量'),
         () => findFieldByLabel('庫存'),
-        '[data-product-edit-field-unique-id="stock"] input.eds-input__input:not([type="file"])',
-        '[data-product-edit-field-unique-id="stock"] input:not([type="file"])',
-        'input[placeholder*="數量"]',
         'input[placeholder*="庫存"]'
       ))
     })

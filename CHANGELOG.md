@@ -4,6 +4,12 @@
 
 ## 2026-07-23
 
+### 修復：findFieldByLabel 「最低購買數量」誤覆蓋商品庫存數量 (stock)
+
+- `extension/content.js` — 🔥 **修復 `findFieldByLabel` 關鍵字誤比對**：修正 `fieldIdMap` 比對邏輯，改採 Key 精確匹配優先 (`fieldIdMap[cleanLabel]`) 並依長度遞減排序。解決傳入 `最低購買數量` 時因子字串 `數量` 誤匹配到 `'數量': 'stock'`，導致填寫最低購買數量 (1) 時將原先填好的商品庫存 (999) 覆蓋為 `1` 的致命問題。
+- `extension/batch-upload-test.js` — **修復 DOM 斷言選擇器與診斷增強**：DOM 斷言優先直接定位 `[data-product-edit-field-unique-id="stock"]`，並優化備用選擇器容器層級（避免 `closest` 匹配至大容器）；新增 `allInputs` 診斷輸出，實時 Dump 全頁 Input DOM 狀態。
+- `docs/spec/025-商品描述文字填寫壞了的修復方法.md` — 更新第 §5.3 節記錄根因細節與修復方案。
+
 ### 修復：Bracket Imbalance + Popup 不回報真實填入結果
 
 - `extension/content.js` — 🔥 **修復 bracket imbalance（主因）**：移除第 948~955 行 dangling `async function fillCategoryAsync` 殘碼。該殘碼僅有宣告開頭、無完整主體，導致整支 content script 語法錯誤無法執行。所有舊版 checkout 回來也都帶著此殘碼，所以呈現「全部版本都失敗」。
