@@ -103,8 +103,8 @@ async function scanProducts() {
             }
 
             const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-            // API 爬取多個 list_type 頁籤 (live_all 架上, banned 審核中/違規, unlisted 未上架)
-            const listTypes = ['live_all', 'banned', 'unlisted', 'deleting']
+            // API 爬取多個 list_type 頁籤 (live_all 架上, reviewing 審核中, unpublished 未上架, violation 違規/刪除)
+            const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
             for (const lt of listTypes) {
               try {
                 const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })

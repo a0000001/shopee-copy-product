@@ -492,15 +492,14 @@ FieldId 改變但 radio 結構相同（`.eds-radio-group` → `.eds-radio` → `
 2. 透過 CDP 或 extension 的 content script 操作
 3. 不要嘗試重新登入，要重複使用現有 session
 
-### 頁面網址
-
-| 用途 | URL |
-|------|-----|
-| 全部商品 | `https://seller.shopee.tw/portal/product/list/live/all` |
-| 架上商品 | `https://seller.shopee.tw/portal/product/list/live/live` |
-| 違規/刪除 | `https://seller.shopee.tw/portal/product/list/banned/action` |
-| 審核中 | `https://seller.shopee.tw/portal/product/list/review` |
-| 未上架 | `https://seller.shopee.tw/portal/product/list/unlist` |
+### 頁面網址與 API list_type 參數
+ 
+ | 用途 | 真實頁面 URL | API `list_type` 參數 | 實測狀態 |
+ |------|-------------|---------------------|---------|
+ | 全部商品 / 架上商品 | `https://seller.shopee.tw/portal/product/list/live/all` | `live_all` | 200 OK |
+ | 審核中 (Under Review) | `https://seller.shopee.tw/portal/product/list/reviewing` | `reviewing` | 200 OK |
+ | 未上架 (Unpublished) | `https://seller.shopee.tw/portal/product/list/unpublished/unlisted` | `unpublished` | 200 OK |
+ | 違規/刪除 (Banned) | `https://seller.shopee.tw/portal/product/list/violation/banned` | `violation` / `banned` | 200 OK |
 
 ### 商品數量摘要
 

@@ -6,7 +6,8 @@
 
 ### 修復：全量頁籤商品掃描 (35 架上 + 3 審核中 = 38 筆) 與直注入發布判定 (026-04 spec)
 
-- `extension/batch-upload.js` — 🔥 **實作全量頁籤商品掃描**：擴充 `scanProducts()` API 爬取邏輯，涵蓋 `live_all` (架上)、`banned` (審核中/違規)、`unlisted` (未上架) 與 `deleting` 頁籤。解決舊程式僅爬架上 35 筆漏掉 3 筆審核中商品導致重複刊登問題，介面顯示格式改為 `38 筆已上架商品 (35 筆架上 + 3 筆審核中/其他)`。
+- `extension/batch-upload.js` — 🔥 **實作全量頁籤商品掃描**：修正 `scanProducts()` 蝦皮真實 API `list_type` 參數為 `['live_all', 'reviewing', 'unpublished', 'violation', 'banned']` (正確獲取審核中 `reviewing` 與未上架 `unpublished` 頁籤)。解決舊程式僅爬架上 35 筆漏掉 3 筆審核中商品導致重複刊登問題，介面顯示格式改為 `38 筆已上架商品 (35 筆架上 + 3 筆審核中/其他)`。
+- `docs/data/mcp devtools 蒐集的蝦皮資料/001-賣家中心新增商品（seller-new-product-dom-analysis）.md` — 更新真實頁面 URL 與 API `list_type` 參數對照表。
 - `extension/batch-upload.js` — 🔥 **`chrome.scripting.executeScript` 直注入發布判定**：點擊「儲存並上架」後，採用直注入輪詢檢查 DOM 是否彈出「審核中」、「提交成功」或 URL 跳轉，徹底解鎖訊息通道發送中斷與審核無跳轉造成的誤判 Retry 致命問題。
 - `docs/spec/026-04-plan-商品列表含審核頁籤全量掃描與點擊發布直注入檢查.md` — 新增 026-04 規格計畫文件。
 
