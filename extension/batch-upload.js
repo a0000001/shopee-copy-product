@@ -75,7 +75,7 @@ async function scanProducts() {
     let liveCount = 0
     let reviewCount = 0
 
-    // 1. 第一步：先透過 sendMessage 取得穩定的 35 筆架上 DOM 商品
+    // 1. 第一步：先透過 sendMessage 取得穩定的架上 DOM 商品
     try {
       const domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
       if (Array.isArray(domItems)) {
@@ -83,7 +83,7 @@ async function scanProducts() {
           const n = (item.name || '').trim()
           if (n && !nameSet.has(n)) {
             nameSet.add(n)
-            products.push(item)
+            products.push({ ...item, status: 'live' })
             liveCount++
           }
         }
@@ -92,7 +92,7 @@ async function scanProducts() {
       console.warn('[SGC] DOM sendMessage scan failed:', e.message)
     }
 
-    // 2. 第二步：使用 executeScript 直注入發送 API，專門補爬「審核中 (reviewing)」與其他頁籤並去重合併
+    // 2. 第二步：使用 executeScript 直注入 API 爬取 reviewing, unpublished, violation, banned 等頁籤
     try {
       const [scriptRes] = await chrome.scripting.executeScript({
         target: { tabId: sellerTab.id },
@@ -104,7 +104,8 @@ async function scanProducts() {
             try {
               const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
               if (r.ok) {
-                const list = (await r.json())?.data?.products || (await r.json())?.data?.product_list || []
+                const json = await r.json()
+                const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
                 for (const p of list) {
                   const n = (p.name || '').trim()
                   if (n) apiItems.push({ name: n, productId: String(p.id || ''), status: lt })
@@ -119,10 +120,14 @@ async function scanProducts() {
       if (scriptRes && scriptRes.result && Array.isArray(scriptRes.result)) {
         for (const item of scriptRes.result) {
           const n = (item.name || '').trim()
-          if (n && !nameSet.has(n)) {
-            nameSet.add(n)
-            products.push(item)
-            reviewCount++
+          if (n) {
+            if (!nameSet.has(n)) {
+              nameSet.add(n)
+              products.push(item)
+            }
+            if (item.status === 'reviewing' || item.status === 'banned') {
+              reviewCount++
+            }
           }
         }
       }
@@ -136,9 +141,12 @@ async function scanProducts() {
 
     state.existingNames = nameSet
     state.reviewCount = reviewCount
+    state.liveCount = liveCount
+
+    const totalDisplay = nameSet.size
     const summaryText = reviewCount > 0
-      ? `${products.length} 筆 (${liveCount} 筆已上架 + ${reviewCount} 筆審核中)`
-      : `${products.length} 筆已上架`
+      ? `${totalDisplay} 筆 (${liveCount} 筆已上架 + ${reviewCount} 筆審核中)`
+      : `${totalDisplay} 筆已上架`
 
     log(`掃描取得 ${summaryText}`, 'ok')
 
