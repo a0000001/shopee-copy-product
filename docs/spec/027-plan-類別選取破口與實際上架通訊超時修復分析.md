@@ -1,7 +1,7 @@
 # 027 — Plan: 類別選取與 SPA 導航 Context 銷毀修復計畫
 
 > 本文件記錄二刷診斷後的真實根因、修復方案及驗證計畫。
-> 已將 Claude Web 的審核、程式碼事實校對與**單件測試 23/23 項成功的黃金對照日誌 (Golden Reference Log)** 完整對齊整合。
+> 已將 Claude Web 的最新審核與程式碼事實校對完畢，排除假修復與靜默選錯類別問題，並整合單件測試 23/23 項成功的黃金對照日誌。
 
 ---
 
@@ -31,18 +31,7 @@
 
 ---
 
-## 二、 專案架構與關鍵檔案清單
-
-| 檔案 | 說明 | 絕對路徑 |
-|------|------|----------|
-| `content.js` | 注入蝦皮賣家中心頁面的 Content Script，負責 DOM 操作與狀態維護。 | `file:///S:/projects/shopee-copy-product/extension/content.js` |
-| `batch-upload.js` | 批次上傳 UI / 分頁控制邏輯，負責 Tab 建立、狀態輪詢與導航監聽。 | `file:///S:/projects/shopee-copy-product/extension/batch-upload.js` |
-| `batch-upload.html` | 批次上傳 UI 介面與錯誤 Log 顯示區。 | `file:///S:/projects/shopee-copy-product/extension/batch-upload.html` |
-| `product-catalog-tw.json` | 實際商品目錄資料檔（包含多筆商品）。 | `file:///S:/projects/shopee-copy-product/docs/data/product-catalog-tw.json` |
-
----
-
-## 三、 確切根因與破口分析 (Root Cause Analysis)
+## 二、 確切根因與破口分析 (Root Cause Analysis)
 
 ### 根因 1 (主因)：`window._sgcFillState` 在 Vue SPA 導航後遺失
 
@@ -55,18 +44,17 @@
 
 ---
 
-### 根因 2 (硬傷)：ID 格式類別 (如 "100644,101937") 無法比對與 Fallback 澄清
+### 根因 2 (硬傷)：ID 格式類別 (如 "100644,101937") 匹配機制與嚴格報錯
 
-- **程式碼事實澄清**：
-  - [content.js L893-L903](file:///s:/projects/shopee-copy-product/extension/content.js#L893-L903) 內部的 fallback 邏輯分別為：
-    - Col 0：選取包含 `電腦與周邊配件` / `電腦` / `3C` 之選項。
-    - Col 1：選取包含 `軟體` / `Software` 之選項。
-    - Col 2 以上：若有第 3 層選單才尋找 `其他`。
-- **問題**：當 `ps_category` 是 `"100644,101937"` 數字 ID 時，因為不含 `>` 符號，`categoryPath` 變為空陣列，直接走上述 fallback，導致非電腦軟體類商品被選錯類別，致使後續屬性欄位比對失敗。
+- **原設計漏洞**：
+  - 若 ID 比對失敗直接 Fallback 至固定類別（如「電腦與周邊配件 > 軟體」），會導致非電腦軟體類商品被靜默選成錯誤類別，屬性欄位對不上，儲存按鈕永遠不會 Ready。
+- **正解規則**：
+  - 嚴格區分文字路徑 mode 與 ID 匹配 mode。
+  - 當 ID 比對失敗時，**禁止靜默 fallback 至固定類別**，必須明確 `throw new Error(...)`，將錯誤記錄於批次報告中。
 
 ---
 
-## 四、 擬定修復方案 (Proposed Changes)
+## 三、 精確修復方案 (Proposed Changes)
 
 ### Component 1: `batch-upload.js` 加入 Tab 導航監聽 (修復點 A)
 
@@ -118,41 +106,66 @@ async function fillAndSaveSingle(item, tabId) {
 
 ---
 
-### Component 2: `content.js` 類別 ID 相容處理與選取優化 (修復點 B)
+### Component 2: `content.js` 類別 ID 結構化匹配與顯式報錯 (修復點 B)
 
 #### [MODIFY] [content.js](file:///S:/projects/shopee-copy-product/extension/content.js)
-- 在 `fillCategoryAsync` 解析 `categoryRaw` 時，加入 ID 識別模式。
-- 當為純數字/逗號格式時，優先尋找包含對應 `data-id` / `data-category-id` 的 DOM 選項；若 DOM 未暴露 ID 屬性，則安全 fallback 至文字比對。
+- 在 `fillCategoryAsync` 解析 `categoryRaw` 時，區分 `{ mode: 'path', path: [...] }` 與 `{ mode: 'id', ids: [...] }`。
+- 修改 `while (colIdx < maxLevels)` 迴圈，同步分支處理 ID 模式：
 
 ```javascript
-// 修改 extension/content.js fillCategoryAsync (L841+)
-let categoryPath = []
+// 修改 extension/content.js fillCategoryAsync
+let categoryConfig = { mode: 'fallback', path: ['電腦與周邊配件', '軟體'] }
 const categoryRaw = data.category || data.ps_category || ''
 if (categoryRaw && typeof categoryRaw === 'string') {
   if (categoryRaw.includes('>')) {
-    categoryPath = categoryRaw.split('>').map(s => s.trim())
+    categoryConfig = { mode: 'path', path: categoryRaw.split('>').map(s => s.trim()) }
   } else if (/^[\d,]+$/.test(categoryRaw.trim())) {
-    const ids = categoryRaw.split(',').map(s => s.trim())
-    console.log('[SGC] ps_category is ID format, target IDs:', ids)
-    categoryPath = { mode: 'id', ids }
+    categoryConfig = { mode: 'id', ids: categoryRaw.split(',').map(s => s.trim()) }
   }
+}
+
+// 在迴圈中分支處理
+while (colIdx < maxLevels) {
+  // ...尋找列 DOM (col) 邏輯...
+  const items = col.querySelectorAll('.category-item, [class*="category-item"], li')
+  if (items.length === 0) break
+
+  let targetItem = null
+  if (categoryConfig.mode === 'id') {
+    const targetId = categoryConfig.ids[colIdx]
+    if (targetId) {
+      targetItem = Array.from(items).find(el => {
+        const idAttr = el.getAttribute('data-id') || el.getAttribute('data-category-id') || el.getAttribute('value') || el.dataset?.id || el.dataset?.categoryId
+        return idAttr && String(idAttr).trim() === targetId
+      })
+    }
+    if (!targetId && colIdx >= categoryConfig.ids.length) break // 到了葉節點
+    if (!targetItem) {
+      throw new Error(`類別 ID ${targetId} 在第 ${colIdx} 層選單中找不到對應 DOM 選項`)
+    }
+  } else {
+    // 原本文字路徑/Fallback 選取邏輯...
+  }
+
+  // 點擊 targetItem...
+  colIdx++
 }
 ```
 
 ---
 
-### Component 3: `batch-upload.html` 複製診斷紀錄增強 (體驗優化)
+### Component 3: `batch-upload.html` / `batch-upload.js` 複製診斷紀錄增強 (體驗優化)
 
-#### [MODIFY] [batch-upload.html](file:///S:/projects/shopee-copy-product/extension/batch-upload.html)
-- 確保按下「複製錯誤訊息」時，包含時間戳記與詳細錯誤 stack。
+#### [MODIFY] [batch-upload.js](file:///S:/projects/shopee-copy-product/extension/batch-upload.js)
+- 按下「複製錯誤訊息」時，複製完整時間戳記、統計數據與 `logContainer` 文字。
 
 ---
 
-## 五、 執行任務與驗證計畫 (Tasks & Verification Plan)
+## 四、 執行任務與驗證計畫 (Tasks & Verification Plan)
 
 ### Tasks
 - [ ] **Task 1**: 修改 `batch-upload.js` 加入 `chrome.tabs.onUpdated` 導航偵測 (修復點 A)。
-- [ ] **Task 2**: 修改 `content.js` 擴充 `fillCategoryAsync` 之 ID 格式類別相容機制 (修復點 B)。
+- [ ] **Task 2**: 修改 `content.js` 實現結構化類別 ID 匹配與顯式報錯機制 (修復點 B)。
 - [ ] **Task 3**: 增強 `batch-upload.html` / `batch-upload.js` 之錯誤複製細節。
 
 ### Automated & Manual Verification
