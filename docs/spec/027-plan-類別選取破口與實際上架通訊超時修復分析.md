@@ -1,11 +1,37 @@
 # 027 — Plan: 類別選取與 SPA 導航 Context 銷毀修復計畫
 
 > 本文件記錄二刷診斷後的真實根因、修復方案及驗證計畫。
-> 已將 Claude Web 的審核與程式碼事實校對完畢並整合入本計畫中。
+> 已將 Claude Web 的審核、程式碼事實校對與**單件測試 23/23 項成功的黃金對照日誌 (Golden Reference Log)** 完整對齊整合。
 
 ---
 
-## 一、 專案架構與關鍵檔案清單
+## 一、 黃金對照日誌 (Golden Reference DOM Diagnostic)
+
+在 2026-07-23 測試中，單件測試腳本 `batch-upload-test.js` 23 項 DOM 斷言與媒體/按鈕檢查**全部通過**。以下為實測成功時擷取之賣家中心黃金 DOM 結構映射：
+
+### 1.1 成功測試步驟與時間序列
+- **12:56:21** 啟動 `fillProductData` (文字與屬性填寫)
+- **12:56:34** `fillProductData` 填寫完成 (耗時約 13 秒)
+- **12:56:34** 啟動 `uploadMedia` (圖片與影片上傳)
+- **12:56:36** `uploadMedia` 上傳完成 (圖片=6, 影片=1，耗時 2 秒)
+- **12:56:36** `checkSaveButton` 檢查回傳：`{"ready":true, "btnText":"儲存並上架", "reason":"OK"}`
+
+### 1.2 驗證成功之 DOM uniqueId 欄位對應表
+| 欄位名稱 | UniqueId Selector (`data-product-edit-field-unique-id`) | 成功填入/讀取值 |
+|---|---|---|
+| 商品名稱 | `name` | `"測試商品專用請勿下單購買（10字以上）"` |
+| 商品價格 | `price` | `"1999"` |
+| 商品庫存 | `stock` | `"999"` |
+| 最低購買數量 | `minpq` | `"1"` |
+| 重量 | `weight` | `"0.5"` |
+| 尺寸 (長x寬x高) | `brandAndAttributes` | `"10x10x4"` |
+| 禁運品 | `dangersGoods` | `"0"` / `"1"` |
+| 較長備貨 | `preOrder` | `"false"` |
+| 信用卡分期 | `productInstallmentStatus` | `"false"` / `"true"` |
+
+---
+
+## 二、 專案架構與關鍵檔案清單
 
 | 檔案 | 說明 | 絕對路徑 |
 |------|------|----------|
@@ -16,7 +42,7 @@
 
 ---
 
-## 二、 確切根因與破口分析 (Root Cause Analysis)
+## 三、 確切根因與破口分析 (Root Cause Analysis)
 
 ### 根因 1 (主因)：`window._sgcFillState` 在 Vue SPA 導航後遺失
 
@@ -40,7 +66,7 @@
 
 ---
 
-## 三、 擬定修復方案 (Proposed Changes)
+## 四、 擬定修復方案 (Proposed Changes)
 
 ### Component 1: `batch-upload.js` 加入 Tab 導航監聽 (修復點 A)
 
@@ -122,7 +148,7 @@ if (categoryRaw && typeof categoryRaw === 'string') {
 
 ---
 
-## 四、 執行任務與驗證計畫 (Tasks & Verification Plan)
+## 五、 執行任務與驗證計畫 (Tasks & Verification Plan)
 
 ### Tasks
 - [ ] **Task 1**: 修改 `batch-upload.js` 加入 `chrome.tabs.onUpdated` 導航偵測 (修復點 A)。
