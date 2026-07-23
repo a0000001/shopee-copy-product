@@ -1320,80 +1320,83 @@
     // 8. 最低購買數量：跳過不填，保持蝦皮預設值 1
     // 9. 運費/重量：跳過不填，保持蝦皮預設空白
 
-    // 10. 信用卡分期 (由上至下第 10 區塊，預設開啟選「是」，預設 Fallback 到 24 期)
+    // 10. 信用卡分期 (金額 >= 1000 時開啟選「是」並設定 24 期；金額 < 1000 保持預設「否」)
+    const numericPrice = Number(cleanPrice || 0)
     const termTarget = String(data.installment || 24)
-    try {
-      // 1. 開啟分期付款（選「是」）
-      const enableRadio = document.querySelector('[data-product-edit-field-unique-id*="installment"] input[value="true"], [data-product-edit-field-unique-id*="installment"] input.eds-radio__input[value="true"], [data-product-edit-field-unique-id*="productInstallmentStatus"] input[value="true"]')
-        || document.querySelector('[data-product-edit-field-unique-id*="installment"] .eds-switch, [data-product-edit-field-unique-id*="productInstallmentStatus"] .eds-switch')
-        || (() => {
-          const rows = document.querySelectorAll('.edit-row')
-          for (const row of rows) {
-            const label = (row.querySelector('.edit-label')?.textContent || '').replace(/[\s*]+/g, '')
-            if (label.includes('分期')) {
-              return row.querySelector('input[type="radio"][value="true"], input[type="radio"][value="1"], .eds-switch')
-            }
-          }
-          return null
-        })()
 
-      if (enableRadio) {
-        if (enableRadio.tagName === 'INPUT' && enableRadio.type === 'radio') {
-          enableRadio.checked = true
-          enableRadio.dispatchEvent(new Event('change', { bubbles: true }))
-        } else {
-          enableRadio.click()
-        }
-        results.push({ field: '信用卡分期付款', ok: true })
-      } else {
-        results.push({ field: '信用卡分期付款', ok: false, error: '找不到分期付款開關' })
-      }
-
-      // 2. 設定期數 (預設選 24 期，或傳入的 termTarget)
+    if (numericPrice >= 1000) {
+      console.log(`[SGC] Price (${numericPrice}) >= 1000, enabling credit card installment (Yes, ${termTarget} terms)...`)
       try {
-        let termBtn = null
-        for (let i = 0; i < 15; i++) {
-          await new Promise(r => setTimeout(r, 200))
-          termBtn = Array.from(document.querySelectorAll('button'))
-            .find(b => b.textContent.trim() === '設定期數')
-          if (termBtn) break
-        }
-        if (termBtn) {
-          termBtn.click()
-          await waitForElement('.tenure-slider-bubble', 4000)
-          await new Promise(r => setTimeout(r, 600))
+        // 定位信用卡分期區塊
+        const installmentSection = document.querySelector('[data-product-edit-field-unique-id="productInstallmentStatus"]')
+          || document.querySelector('[data-product-edit-field-unique-id*="installment"]')
+          || Array.from(document.querySelectorAll('.edit-row')).find(r => (r.querySelector('.edit-label')?.textContent || '').includes('分期'))
 
-          // 點對應期數 Bubble (預設 24期)
-          const targetBubble = Array.from(document.querySelectorAll('.tenure-slider-bubble'))
-            .find(b => b.textContent.trim().includes(`${termTarget}期`))
-            || Array.from(document.querySelectorAll('.tenure-slider-bubble')).pop()
+        if (installmentSection) {
+          // 搜尋並點擊「是」Radio
+          const yesRadio = Array.from(installmentSection.querySelectorAll('label, input, span, div'))
+            .find(el => (el.textContent || '').trim() === '是' || el.value === 'true' || el.value === '1')
 
-          if (targetBubble) targetBubble.click()
-          await new Promise(r => setTimeout(r, 600))
-
-          let saveBtn = null
-          for (let i = 0; i < 15; i++) {
-            await new Promise(r => setTimeout(r, 200))
-            saveBtn = Array.from(document.querySelectorAll('button')).find(b => {
-              const txt = b.textContent.trim()
-              return (txt === '確認' || txt === '儲存' || txt === '保存' || txt === 'Confirm') && !b.disabled
-            })
-            if (saveBtn) break
-          }
-          if (saveBtn) {
-            saveBtn.click()
-            results.push({ field: '設定期數', ok: true })
+          if (yesRadio) {
+            yesRadio.click()
+            await new Promise(r => setTimeout(r, 600))
+            results.push({ field: '信用卡分期付款', ok: true })
           } else {
-            results.push({ field: '設定期數', ok: false, error: '找不到啟用/確認按鈕' })
+            results.push({ field: '信用卡分期付款', ok: false, error: '找不到「是」選項按鈕' })
+          }
+
+          // 設定期數
+          try {
+            let termBtn = null
+            for (let i = 0; i < 15; i++) {
+              await new Promise(r => setTimeout(r, 200))
+              termBtn = Array.from(document.querySelectorAll('button'))
+                .find(b => b.textContent.trim() === '設定期數')
+              if (termBtn) break
+            }
+            if (termBtn) {
+              termBtn.click()
+              await waitForElement('.tenure-slider-bubble', 4000)
+              await new Promise(r => setTimeout(r, 600))
+
+              // 點對應期數 Bubble (預設 24期)
+              const targetBubble = Array.from(document.querySelectorAll('.tenure-slider-bubble'))
+                .find(b => b.textContent.trim().includes(`${termTarget}期`))
+                || Array.from(document.querySelectorAll('.tenure-slider-bubble')).pop()
+
+              if (targetBubble) targetBubble.click()
+              await new Promise(r => setTimeout(r, 600))
+
+              let saveBtn = null
+              for (let i = 0; i < 15; i++) {
+                await new Promise(r => setTimeout(r, 200))
+                saveBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                  const txt = b.textContent.trim()
+                  return (txt === '確認' || txt === '儲存' || txt === '保存' || txt === 'Confirm') && !b.disabled
+                })
+                if (saveBtn) break
+              }
+              if (saveBtn) {
+                saveBtn.click()
+                results.push({ field: '設定期數', ok: true })
+              } else {
+                results.push({ field: '設定期數', ok: false, error: '找不到啟用/確認按鈕' })
+              }
+            } else {
+              results.push({ field: '設定期數', ok: false, error: '找不到設定期數按鈕' })
+            }
+          } catch (e) {
+            results.push({ field: '設定期數', ok: false, error: e.message })
           }
         } else {
-          results.push({ field: '設定期數', ok: false, error: '找不到設定期數按鈕' })
+          results.push({ field: '信用卡分期付款', ok: false, error: '找不到信用卡分期區塊' })
         }
       } catch (e) {
-        results.push({ field: '設定期數', ok: false, error: e.message })
+        console.error('[SGC] Installment setting error:', e)
       }
-    } catch (e) {
-      console.error('[SGC] Installment setting error:', e)
+    } else {
+      console.log(`[SGC] Price (${numericPrice}) < 1000, skipping installment (set to No/Default)`)
+      results.push({ field: '信用卡分期付款', ok: true, reason: 'Price < 1000 (Default No)' })
     }
 
     // 處理媒體自動下載與上傳

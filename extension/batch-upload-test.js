@@ -209,6 +209,13 @@ document.getElementById('btnTest').addEventListener('click', async () => {
       if (dom.price !== null) check(assertContains('價格', dom.price, '1999'))
       if (dom.stock !== null) check(assert('數量', dom.stock, '999'))
       if (dom.weight !== null) check(assertContains('重量', dom.weight, '0.5'))
+
+      // 斷言信用卡分期 (金額 >= 1000 時驗證已成功開啟選「是」與 24期)
+      const cleanPriceNum = Number((dom.price || '').replace(/[^\d]/g, ''))
+      if (cleanPriceNum >= 1000 && dom.allInputs) {
+        const installmentInput = dom.allInputs.find(i => i.uniqueId === 'productInstallmentStatus' && i.value === 'true')
+        check(assert('信用卡分期狀態 (金額 >= 1000 應開啟選是)', Boolean(installmentInput), true))
+      }
     } catch (e) {
       log('   DOM 斷言跳過: ' + e.message, 'info')
     }
