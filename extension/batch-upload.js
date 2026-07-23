@@ -72,79 +72,79 @@ async function scanProducts() {
 
     let products = null
 
-    // 1. 嘗試 sendMessage 通訊
+    // 1. 第一優先：改用 chrome.scripting.executeScript 直接發動蝦皮多頁籤 API 爬取 (live_all, reviewing, unpublished)
     try {
-      products = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
-    } catch (e) {
-      console.warn('[SGC] sendMessage failed, using scripting fallback:', e.message)
-    }
+      const [scriptRes] = await chrome.scripting.executeScript({
+        target: { tabId: sellerTab.id },
+        func: async () => {
+          const items = []
+          const nameSet = new Set()
+          let liveCount = 0
+          let reviewCount = 0
 
-    // 2. 備用方案：若 Content Script 因擴充功能重載斷線，改用 chrome.scripting.executeScript 直接爬取
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      try {
-        const [scriptRes] = await chrome.scripting.executeScript({
-          target: { tabId: sellerTab.id },
-          func: async () => {
-            const items = []
-            const nameSet = new Set()
-            let liveCount = 0
-            let reviewCount = 0
-
-            function collectDOM() {
-              for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
-                const href = a.getAttribute('href') || ''
-                if (!/\/portal\/product\/\d+/.test(href)) continue
-                const name = a.textContent.trim()
-                if (!name || nameSet.has(name)) continue
-                nameSet.add(name)
-                const idMatch = href.match(/\/portal\/product\/(\d+)/)
-                items.push({ name, productId: idMatch ? idMatch[1] : '' })
-              }
+          function collectDOM() {
+            for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
+              const href = a.getAttribute('href') || ''
+              if (!/\/portal\/product\/\d+/.test(href)) continue
+              const name = a.textContent.trim()
+              if (!name || nameSet.has(name)) continue
+              nameSet.add(name)
+              const idMatch = href.match(/\/portal\/product\/(\d+)/)
+              items.push({ name, productId: idMatch ? idMatch[1] : '' })
             }
+          }
 
-            const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-            // API 爬取多個 list_type 頁籤 (live_all 架上, reviewing 審核中, unpublished 未上架, violation 違規/刪除)
-            const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
-            for (const lt of listTypes) {
-              try {
-                const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
-                if (r.ok) {
-                  const list = (await r.json())?.data?.products || []
-                  if (lt === 'live_all') liveCount += list.length
-                  else reviewCount += list.length
+          const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
+          // API 全量爬取多個 list_type 頁籤 (live_all 架上, reviewing 審核中, unpublished 未上架, violation 違規/刪除)
+          const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
+          for (const lt of listTypes) {
+            try {
+              const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
+              if (r.ok) {
+                const list = (await r.json())?.data?.products || []
+                if (lt === 'live_all') liveCount += list.length
+                else reviewCount += list.length
 
-                  for (const p of list) {
-                    const n = (p.name || '').trim()
-                    if (n && !nameSet.has(n)) {
-                      nameSet.add(n)
-                      items.push({ name: n, productId: String(p.id || ''), status: lt })
-                    }
+                for (const p of list) {
+                  const n = (p.name || '').trim()
+                  if (n && !nameSet.has(n)) {
+                    nameSet.add(n)
+                    items.push({ name: n, productId: String(p.id || ''), status: lt })
                   }
                 }
-              } catch (e) {}
-            }
-
-            // 若 API 爬取成功，直接傳回附帶分類統計
-            if (items.length > 0) {
-              return { items, liveCount, reviewCount }
-            }
-
-            // 若 API 失敗，降級為 DOM 掃描
-            collectDOM()
-            return { items, liveCount: items.length, reviewCount: 0 }
+              }
+            } catch (e) {}
           }
-        })
 
-        if (scriptRes && scriptRes.result) {
-          const res = scriptRes.result
-          if (Array.isArray(res)) products = res
-          else if (res.items) {
-            products = res.items
-            products.meta = { liveCount: res.liveCount, reviewCount: res.reviewCount }
+          // 若 API 爬取成功，傳回包含多頁籤數據
+          if (items.length > 0) {
+            return { items, liveCount, reviewCount }
           }
+
+          // 若 API 失敗，降級為 DOM 掃描
+          collectDOM()
+          return { items, liveCount: items.length, reviewCount: 0 }
         }
+      })
+
+      if (scriptRes && scriptRes.result) {
+        const res = scriptRes.result
+        if (Array.isArray(res)) products = res
+        else if (res.items) {
+          products = res.items
+          products.meta = { liveCount: res.liveCount, reviewCount: res.reviewCount }
+        }
+      }
+    } catch (e) {
+      console.warn('[SGC] Priority executeScript failed, using sendMessage fallback:', e.message)
+    }
+
+    // 2. 備用方案：若 executeScript 失敗，再試 sendMessage 通訊
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      try {
+        products = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
       } catch (e) {
-        console.error('[SGC] Scripting fallback failed:', e.message)
+        console.error('[SGC] sendMessage fallback also failed:', e.message)
       }
     }
 
