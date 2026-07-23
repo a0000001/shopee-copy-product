@@ -211,25 +211,43 @@ scanProducts()
 
 // ── 步驟 3：兩段式 Fire-and-Forget 上傳單件商品 ──
 async function fillAndSaveSingle(item, tabId) {
-  // 1. 第一段：文字填寫 (Fire-and-Forget, 跳過媒體上傳避免重複與超時)
-  const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
-  if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
+  let sawRunning = false
+  let navigationDetected = false
 
-  // 輪詢等待文字填寫完成 (最多 45 秒)
-  let fillDone = false
-  for (let i = 0; i < 150; i++) {
-    await sleep(300)
-    try {
-      const st = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
-      if (st && st.status === 'done') {
-        if (st.result && st.result.ok) { fillDone = true; break }
-        else throw new Error((st.result && st.result.error) || '文字填寫失敗')
-      }
-    } catch (e) {
-      if (e.message.includes('文字填寫失敗')) throw e
+  const onUpdated = (updatedTabId, info) => {
+    if (updatedTabId === tabId && info.status === 'loading' && sawRunning) {
+      navigationDetected = true
     }
   }
-  if (!fillDone) throw new Error('文字填寫超時 (45s)')
+  chrome.tabs.onUpdated.addListener(onUpdated)
+
+  try {
+    // 1. 第一段：文字填寫 (Fire-and-Forget, 跳過媒體上傳避免重複與超時)
+    const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
+    if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
+
+    // 輪詢等待文字填寫完成 (最多 45 秒)
+    let fillDone = false
+    for (let i = 0; i < 150; i++) {
+      await sleep(300)
+      if (navigationDetected) {
+        throw new Error('偵測到分頁於文字填寫期間發生導航/重新載入，content script 狀態已遺失')
+      }
+      try {
+        const st = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
+        if (st && st.status === 'running') sawRunning = true
+        if (st && st.status === 'done') {
+          if (st.result && st.result.ok) { fillDone = true; break }
+          else throw new Error((st.result && st.result.error) || '文字填寫失敗')
+        }
+      } catch (e) {
+        if (e.message.includes('文字填寫失敗') || e.message.includes('偵測到分頁')) throw e
+      }
+    }
+    if (!fillDone) throw new Error('文字填寫超時 (45s)')
+  } finally {
+    chrome.tabs.onUpdated.removeListener(onUpdated)
+  }
 
   // 2. 第二段：媒體上傳 (Fire-and-Forget)
   const mediaStart = await chrome.tabs.sendMessage(tabId, { action: 'uploadMedia', data: item })
@@ -389,12 +407,29 @@ $('btnStop').addEventListener('click', () => {
 })
 
 $('btnCopyErrors').addEventListener('click', async () => {
-  const errText = state.results.filter(r => !r.ok).map(r => '❌ ' + r.name + ': ' + (r.error || '')).join('\n')
+  const failed = state.results.filter(r => !r.ok)
+  let copyContent = `=== 蝦皮批次上傳診斷報告 (${new Date().toLocaleString()}) ===\n`
+  copyContent += `總計: ${state.results.length} 筆 | 成功: ${state.results.filter(r=>r.ok).length} 筆 | 失敗: ${failed.length} 筆\n\n`
+  
+  if (failed.length > 0) {
+    copyContent += `--- 失敗項目列表 ---\n`
+    failed.forEach(r => {
+      copyContent += `❌ ${r.name}\n   原因: ${r.error || '未知錯誤'}\n`
+    })
+    copyContent += `\n`
+  }
+
+  const logEntries = Array.from(document.querySelectorAll('#logContainer .log-entry')).map(el => el.textContent)
+  if (logEntries.length > 0) {
+    copyContent += `--- 完整執行 Log (${logEntries.length} 條) ---\n`
+    copyContent += logEntries.join('\n')
+  }
+
   try {
-    await navigator.clipboard.writeText(errText)
-    log('已複製錯誤訊息', 'info')
-  } catch {
-    log('複製失敗', 'fail')
+    await navigator.clipboard.writeText(copyContent)
+    log('已複製完整診斷報告與 Log 至剪貼簿', 'ok')
+  } catch (err) {
+    log('複製失敗: ' + err.message, 'fail')
   }
 })
 

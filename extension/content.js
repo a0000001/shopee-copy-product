@@ -837,11 +837,17 @@
     }
 
     // 動態解構類別名稱
-    let categoryPath = []
-    if (data.category && typeof data.category === 'string') {
-      categoryPath = data.category.split('>').map(s => s.trim())
+    let categoryConfig = { mode: 'fallback', path: ['電腦與周邊配件', '軟體'] }
+    const categoryRaw = data.category || data.ps_category || ''
+    if (categoryRaw && typeof categoryRaw === 'string') {
+      if (categoryRaw.includes('>')) {
+        categoryConfig = { mode: 'path', path: categoryRaw.split('>').map(s => s.trim()) }
+      } else if (/^[\d,]+$/.test(categoryRaw.trim())) {
+        categoryConfig = { mode: 'id', ids: categoryRaw.split(',').map(s => s.trim()) }
+        console.log('[SGC] ps_category is ID format, target IDs:', categoryConfig.ids)
+      }
     } else if (Array.isArray(data.categoryPath)) {
-      categoryPath = data.categoryPath
+      categoryConfig = { mode: 'path', path: data.categoryPath }
     }
 
     // 遍歷所有層級
@@ -871,23 +877,44 @@
         break
       }
 
-      let targetItem = null
-      const targetText = categoryPath[colIdx]
-
-      if (targetText) {
-        targetItem = Array.from(items).find(el => (el.textContent || '').includes(targetText))
+      // 🔍 Dry-run 診斷 Log：印出第 0 個節點的 outerHTML 協助真實 DOM 驗證
+      if (items[0]) {
+        console.log(`[SGC Dry-run DOM Check] Col ${colIdx} Item[0] HTML:`, items[0].outerHTML)
       }
 
-      if (!targetItem) {
-        if (colIdx === 0) {
-          targetItem = Array.from(items).find(el => (el.textContent || '').includes('電腦與周邊配件') || (el.textContent || '').includes('電腦') || (el.textContent || '').includes('3C'))
-        } else if (colIdx === 1) {
-          targetItem = Array.from(items).find(el => (el.textContent || '').includes('軟體') || (el.textContent || '').includes('Software'))
-        } else {
+      let targetItem = null
+
+      if (categoryConfig.mode === 'id') {
+        const targetId = categoryConfig.ids[colIdx]
+        if (targetId) {
           targetItem = Array.from(items).find(el => {
-            const text = (el.textContent || '').trim()
-            return text === '其他' || text.includes('其他') || text.toLowerCase().includes('other')
+            const idAttr = el.getAttribute('data-id') || el.getAttribute('data-category-id') || el.getAttribute('value') || el.dataset?.id || el.dataset?.categoryId
+            return idAttr && String(idAttr).trim() === targetId
           })
+        }
+        if (!targetId && colIdx >= categoryConfig.ids.length) {
+          console.log(`[SGC] Reached end of category IDs at level ${colIdx}`)
+          break
+        }
+        if (!targetItem) {
+          throw new Error(`類別 ID ${targetId} 在第 ${colIdx} 層選單中找不到對應 DOM 選項`)
+        }
+      } else {
+        const targetText = categoryConfig.path ? categoryConfig.path[colIdx] : null
+        if (targetText) {
+          targetItem = Array.from(items).find(el => (el.textContent || '').includes(targetText))
+        }
+        if (!targetItem) {
+          if (colIdx === 0) {
+            targetItem = Array.from(items).find(el => (el.textContent || '').includes('電腦與周邊配件') || (el.textContent || '').includes('電腦') || (el.textContent || '').includes('3C'))
+          } else if (colIdx === 1) {
+            targetItem = Array.from(items).find(el => (el.textContent || '').includes('軟體') || (el.textContent || '').includes('Software'))
+          } else {
+            targetItem = Array.from(items).find(el => {
+              const text = (el.textContent || '').trim()
+              return text === '其他' || text.includes('其他') || text.toLowerCase().includes('other')
+            })
+          }
         }
       }
 
