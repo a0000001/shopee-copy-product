@@ -1238,18 +1238,21 @@
     }
 
     let cleanPrice = ''
-    if (price) {
-      cleanPrice = price.split('~')[0].split('-')[0].replace(/[^\d]/g, '').trim()
+    if (price != null && price !== '') {
+      cleanPrice = String(price).split('~')[0].split('-')[0].replace(/[^\d]/g, '').trim()
     }
 
     if (cleanPrice) {
-      results.push({
-        field: '價格', ...(await fillFieldAsync(cleanPrice,
-          () => findFieldByLabel('價格'),
-          '[data-product-edit-field-unique-id="price"] input.eds-input__input',
-          'input[placeholder*="價格"]'
-        ))
-      })
+      const priceRes = await fillFieldAsync(cleanPrice,
+        () => findFieldByLabel('價格'),
+        '[data-product-edit-field-unique-id="price"] input.eds-input__input',
+        'input[placeholder*="價格"]'
+      )
+      results.push({ field: '價格', ...priceRes })
+      if (priceRes.ok) {
+        console.log('[SGC] Price filled, waiting 600ms for Sales Info and Installment DOM to render...')
+        await new Promise(r => setTimeout(r, 600))
+      }
     }
 
     const stockVal = data.ps_stock != null ? String(data.ps_stock) : '999'

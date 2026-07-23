@@ -4,6 +4,12 @@
 
 ## 2026-07-23
 
+### 修復：實際上架 Auto-Resume 自動續傳、類別 ID 映射與價格 DOM 安定 (027 spec)
+
+- `extension/batch-upload.js` — 🔥 **實作 Auto-Resume 導航自動續傳 (修復點 A)**：透過 `chrome.tabs.onUpdated` 監聽頁面導航。當在填寫期間發動 SPA 重載時，自動等待新 Content Script 就緒並續傳 `fillProductData`；加入 60 秒全域時間預算硬邊界 (`OVERALL_DEADLINE_MS`)、連續導航上限 (`MAX_NAV_RETRIES = 2`) 與正則 URL 權限防護。
+- `extension/content.js` — 🔥 **修復類別 ID 映射 (categoryMap) 與價格型態安全 (修復點 B & C)**：在 `fillCategoryAsync` 新增 `categoryMap` 映射表（`100644,101937` -> `['電腦與周邊配件', '軟體']`），解決蝦皮選單 DOM 無 `data-id` 屬性導致出錯的問題；修正 `price` 型態轉換 (強制使用 `String(price)`) 並新增 600ms 安定等待，確保填完價格後 Vue 完成 DOM 渲染，順利啟用「商品數量」與「信用卡分期付款」區塊。
+- `docs/spec/027-plan-類別選取破口與實際上架通訊超時修復分析.md` — 更新 027 技術規格計畫文件，詳細記載 Auto-Resume 機制、黃金對照日誌與價格區塊啟用經驗。
+
 ### 修復：findFieldByLabel 「最低購買數量」誤覆蓋商品庫存數量 (stock)
 
 - `extension/content.js` — 🔥 **修復 `findFieldByLabel` 關鍵字誤比對**：修正 `fieldIdMap` 比對邏輯，改採 Key 精確匹配優先 (`fieldIdMap[cleanLabel]`) 並依長度遞減排序。解決傳入 `最低購買數量` 時因子字串 `數量` 誤匹配到 `'數量': 'stock'`，導致填寫最低購買數量 (1) 時將原先填好的商品庫存 (999) 覆蓋為 `1` 的致命問題。
