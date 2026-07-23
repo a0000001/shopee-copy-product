@@ -413,7 +413,35 @@
   async function fillAll(data) {
     const results = []
 
-    const title = data.ps_product_name || data.title || ''
+    function buildTitle(productName, category, tag) {
+      const tagParts = [category, ...(tag || [])].filter(Boolean)
+      const tagStr = tagParts.join('#')
+      const hashtag = tagStr ? ' #' + tagStr : ''
+      const maxLen = 60
+
+      if ((productName + hashtag).length <= maxLen) {
+        return productName + hashtag
+      }
+
+      let remaining = []
+      let currentLen = productName.length + 1
+
+      for (const part of [...tagParts].reverse()) {
+        const wouldAdd = 1 + part.length
+        if (currentLen + wouldAdd <= maxLen) {
+          remaining.unshift(part)
+          currentLen += wouldAdd
+        }
+      }
+
+      if (remaining.length === 0) {
+        return productName.substring(0, maxLen).trim()
+      }
+
+      return productName + ' #' + remaining.join('#')
+    }
+
+    const title = buildTitle(data.ps_product_name, data.category, data.tag) || data.title || ''
     results.push({
       field: '商品名稱', ...(await fillFieldAsync(title,
         () => findFieldByLabel('商品名稱'),
@@ -470,7 +498,40 @@
       await randomJitter()
     }
 
-    const desc = data.ps_product_description || data.description || ''
+    function buildDescription(product, config) {
+      let desc = product.ps_product_description || product.description || ''
+
+      const cs = product.computer_specs
+      if (cs && (cs.vram_min || cs.ram_min || cs.disk)) {
+        desc += '\n\n---\n\n⚙️ 建議配備\n'
+        if (cs.vram_min) {
+          let vram = '• 最低 VRAM：' + cs.vram_min + ' GB'
+          if (cs.vram_rec) vram += '（建議 ' + cs.vram_rec + ' GB）'
+          desc += vram + '\n'
+        }
+        if (cs.ram_min) {
+          let ram = '• 最低 RAM：' + cs.ram_min + ' GB'
+          if (cs.ram_rec) ram += '（建議 ' + cs.ram_rec + ' GB）'
+          desc += ram + '\n'
+        }
+        if (cs.disk) desc += '• 硬碟空間：' + cs.disk + ' GB\n'
+        if (cs.cpu) desc += '• CPU：' + cs.cpu + '\n'
+        if (cs.power) desc += '• 電源：' + cs.power + '\n'
+      }
+
+      if (config && config.hardware_check_url) {
+        const hwLabel = config?.description_footer?.hardware_check_label || '硬體需求檢測'
+        desc += `\n${hwLabel}：${config.hardware_check_url}\n`
+      }
+
+      const safeCategory = product.category || '其他'
+      const tagParts = [safeCategory, ...(product.tag || [])].filter(Boolean)
+      desc += '\n#' + tagParts.join('#')
+
+      return desc
+    }
+
+    const desc = buildDescription(data, data._config)
     if (desc) {
       results.push({
         field: '商品描述', ...(await fillFieldAsync(desc,

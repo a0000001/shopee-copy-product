@@ -80,10 +80,10 @@ async function scanProducts() {
       const domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
       if (Array.isArray(domItems)) {
         for (const item of domItems) {
-          const n = (item.name || '').trim()
+          const n = stripHashtag((item.name || '').trim())
           if (n && !nameSet.has(n)) {
             nameSet.add(n)
-            products.push({ ...item, status: 'live' })
+            products.push({ ...item, name: n, status: 'live' })
             liveCount++
           }
         }
@@ -107,7 +107,9 @@ async function scanProducts() {
                 const json = await r.json()
                 const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
                 for (const p of list) {
-                  const n = (p.name || '').trim()
+                  const rawName = (p.name || '').trim()
+                  const idx = rawName.indexOf(' #')
+                  const n = idx >= 0 ? rawName.substring(0, idx).trim() : rawName
                   if (n) apiItems.push({ name: n, productId: String(p.id || ''), status: lt })
                 }
               }
@@ -119,11 +121,11 @@ async function scanProducts() {
 
       if (scriptRes && scriptRes.result && Array.isArray(scriptRes.result)) {
         for (const item of scriptRes.result) {
-          const n = (item.name || '').trim()
+          const n = stripHashtag((item.name || '').trim())
           if (n) {
             if (!nameSet.has(n)) {
               nameSet.add(n)
-              products.push(item)
+              products.push({ ...item, name: n })
             }
             if (item.status === 'reviewing' || item.status === 'banned') {
               reviewCount++
@@ -151,7 +153,7 @@ async function scanProducts() {
     log(`掃描取得 ${summaryText}`, 'ok')
 
     if (state.catalog.length > 0) {
-      state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
+      state.pending = state.catalog.filter(item => !isExistingProduct(item.ps_product_name, state.existingNames))
       $('scanInfo').textContent = '✅ 已掃描 ' + summaryText + '  待上傳 ' + state.pending.length + ' 筆'
     } else {
       $('scanInfo').textContent = '✅ 已掃描 ' + summaryText
@@ -169,6 +171,22 @@ async function scanProducts() {
   }
 }
 
+function isExistingProduct(productName, existingNames) {
+  const cleanName = stripHashtag(productName || '')
+  if (!cleanName) return false
+  if (existingNames.has(cleanName)) return true
+
+  const truncName = cleanName.substring(0, 60).trim()
+  if (existingNames.has(truncName)) return true
+
+  for (const existing of existingNames) {
+    if (existing.length >= 45 && (cleanName.startsWith(existing) || existing.startsWith(cleanName))) {
+      return true
+    }
+  }
+  return false
+}
+
 // ── 步驟 2：選擇商品目錄 JSON 檔案 ──
 $('fileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0]
@@ -176,7 +194,7 @@ $('fileInput').addEventListener('change', async (e) => {
   try {
     const text = await file.text()
     state.catalog = JSON.parse(text)
-    state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
+    state.pending = state.catalog.filter(item => !isExistingProduct(item.ps_product_name, state.existingNames))
     const liveC = state.existingNames.size - (state.reviewCount || 0)
     const summaryText = state.reviewCount > 0
       ? `${state.existingNames.size} 筆 (${liveC} 筆已上架 + ${state.reviewCount} 筆審核中)`
