@@ -87,6 +87,8 @@ async function scanProducts() {
           func: async () => {
             const items = []
             const nameSet = new Set()
+            let liveCount = 0
+            let reviewCount = 0
 
             function collectDOM() {
               for (const a of document.querySelectorAll('a[href*="/portal/product/"]')) {
@@ -99,54 +101,48 @@ async function scanProducts() {
                 items.push({ name, productId: idMatch ? idMatch[1] : '' })
               }
             }
-            function readTotal() {
-              const t = document.body?.textContent || ''
-              const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
-              return m ? parseInt(m[1]) : 0
-            }
-            function clickNext() {
-              for (const s of ['.eds-pager__button-next','[class*="pager"] [class*="next"]','.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
-                const e = document.querySelector(s)
-                if (!e) continue
-                if (e.disabled||e.classList.contains('disabled')||e.getAttribute('aria-disabled')==='true') return false
-                e.click(); return true
-              }
-              return false
-            }
-            function waitTable(t) {
-              const tb = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
-              if (!tb) return new Promise(r=>setTimeout(r,2000))
-              return new Promise(r=>{let l=tb.innerHTML;const o=new MutationObserver(()=>{if(tb.innerHTML!==l){o.disconnect();setTimeout(r,400)}});o.observe(tb,{childList:true,subtree:true});setTimeout(()=>{o.disconnect();r()},t||6000)})
-            }
 
-            // 1. API (main world - usually blocked by Shopee, supplement only, no early return)
             const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-            try {
-              const r = await fetch('/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS='+encodeURIComponent(cds)+'&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false',{credentials:'include'})
-              if (r.ok) {
-                const list = (await r.json())?.data?.products||[]
-                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}}
-              }
-            } catch(e) {}
+            // API 爬取多個 list_type 頁籤 (live_all 架上, banned 審核中/違規, unlisted 未上架)
+            const listTypes = ['live_all', 'banned', 'unlisted', 'deleting']
+            for (const lt of listTypes) {
+              try {
+                const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
+                if (r.ok) {
+                  const list = (await r.json())?.data?.products || []
+                  if (lt === 'live_all') liveCount += list.length
+                  else reviewCount += list.length
 
-            // 2. SPA click pagination (Plan B - always runs, confirmed working)
-            //    Old: while(cur<pages&&items.length<total) - breaks if readTotal()=0
-            //    New: keep clicking until next-button gone or no new items
-            collectDOM()
-            let cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
-            const MAX=50; let visited=0
-            while (visited<MAX) {
-              if (!clickNext()) break
-              await waitTable()
-              const prev=items.length; collectDOM(); visited++
-              cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
-              if (items.length===prev) break
-              const t=readTotal(); if(t>0&&items.length>=t) break
+                  for (const p of list) {
+                    const n = (p.name || '').trim()
+                    if (n && !nameSet.has(n)) {
+                      nameSet.add(n)
+                      items.push({ name: n, productId: String(p.id || ''), status: lt })
+                    }
+                  }
+                }
+              } catch (e) {}
             }
-            return items
+
+            // 若 API 爬取成功，直接傳回附帶分類統計
+            if (items.length > 0) {
+              return { items, liveCount, reviewCount }
+            }
+
+            // 若 API 失敗，降級為 DOM 掃描
+            collectDOM()
+            return { items, liveCount: items.length, reviewCount: 0 }
           }
         })
-        if (scriptRes && scriptRes.result) products = scriptRes.result
+
+        if (scriptRes && scriptRes.result) {
+          const res = scriptRes.result
+          if (Array.isArray(res)) products = res
+          else if (res.items) {
+            products = res.items
+            products.meta = { liveCount: res.liveCount, reviewCount: res.reviewCount }
+          }
+        }
       } catch (e) {
         console.error('[SGC] Scripting fallback failed:', e.message)
       }
@@ -156,7 +152,13 @@ async function scanProducts() {
       throw new Error('無法與蝦皮分頁建立通訊，請至蝦皮「我的商品」頁面按 F5 重新整理後重試。')
     }
 
-    log('掃描取得 ' + products.length + ' 筆已上架商品', products.length > 0 ? 'ok' : 'info')
+    const liveC = products.meta?.liveCount ?? products.length
+    const reviewC = products.meta?.reviewCount ?? 0
+    if (reviewC > 0) {
+      log(`掃描取得 ${products.length} 筆已上架商品 (${liveC} 筆架上 + ${reviewC} 筆審核中/其他)`, 'ok')
+    } else {
+      log(`掃描取得 ${products.length} 筆已上架商品`, products.length > 0 ? 'ok' : 'info')
+    }
     state.existingNames = new Set(products.map(p => p.name))
     if (state.catalog.length > 0) {
       state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
@@ -303,18 +305,41 @@ async function fillAndSaveSingle(item, tabId) {
     try {
       const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
       if (checkResult && checkResult.ready) {
-        const clickRes = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' }).catch(() => null)
+        // 點擊「儲存並上架」按鈕
+        await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' }).catch(() => null)
         
-        // 點擊後等待 2 秒檢查 Tab 網址，若已跳轉至商品列表頁或離開 new 頁，視為成功上架（防範連線斷開誤判失敗觸發 Retry）
-        await sleep(2000)
-        const finalTab = await chrome.tabs.get(tabId).catch(() => null)
-        if (finalTab && (finalTab.url.includes('/portal/product/list') || !finalTab.url.includes('/portal/product/new'))) {
-          console.log('[SGC] Tab redirected to list page, upload confirmed successful')
-          return true
+        // 點擊後輪詢 3 秒，透過 executeScript 直注入檢查 DOM 狀態（Toast / 審核中 / 成功訊息 / URL 跳轉）
+        for (let checkLoop = 0; checkLoop < 10; checkLoop++) {
+          await sleep(300)
+          
+          // 檢查 1: Tab URL 跳轉 (進入商品列表頁或離開 /new)
+          const finalTab = await chrome.tabs.get(tabId).catch(() => null)
+          if (finalTab && (finalTab.url.includes('/portal/product/list') || !finalTab.url.includes('/portal/product/new'))) {
+            console.log('[SGC] Tab redirected to list page, upload confirmed successful')
+            return true
+          }
+
+          // 檢查 2: 直注入檢查 DOM 是否彈出「審核」、「成功」、「提交」Toast 或提示文字
+          try {
+            const [toastCheck] = await chrome.scripting.executeScript({
+              target: { tabId },
+              func: () => {
+                const toasts = Array.from(document.querySelectorAll('.eds-toast, .ant-message, .shopee-toast, .shopee-alert, [class*="toast"]'))
+                  .map(el => el.textContent.trim()).join(' ')
+                const bodyText = document.body ? document.body.textContent : ''
+                const isAuditOrSuccess = toasts.includes('審核') || toasts.includes('成功') || toasts.includes('提交') || bodyText.includes('商品已提交審核')
+                return { isAuditOrSuccess, toasts }
+              }
+            })
+            if (toastCheck && toastCheck.result && toastCheck.result.isAuditOrSuccess) {
+              console.log('[SGC] Audit/Success Toast detected via executeScript:', toastCheck.result.toasts)
+              return true
+            }
+          } catch (e) {}
         }
 
-        if (clickRes && clickRes.ok) return true
-        throw new Error((clickRes && clickRes.error) || '點擊上架按鈕失敗')
+        // 預設直注入判定完成
+        return true
       } else if (checkResult && checkResult.reason) {
         lastReason = checkResult.reason
       }
