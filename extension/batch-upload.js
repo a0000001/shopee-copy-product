@@ -134,17 +134,19 @@ async function scanProducts() {
       throw new Error('無法與蝦皮分頁建立通訊，請至蝦皮「我的商品」頁面按 F5 重新整理後重試。')
     }
 
-    if (reviewCount > 0) {
-      log(`掃描取得 ${products.length} 筆已上架商品 (${liveCount} 筆架上 + ${reviewCount} 筆審核中/其他)`, 'ok')
-    } else {
-      log(`掃描取得 ${products.length} 筆已上架商品`, products.length > 0 ? 'ok' : 'info')
-    }
     state.existingNames = nameSet
+    state.reviewCount = reviewCount
+    const summaryText = reviewCount > 0
+      ? `${products.length} 筆 (${liveCount} 筆已上架 + ${reviewCount} 筆審核中)`
+      : `${products.length} 筆已上架`
+
+    log(`掃描取得 ${summaryText}`, 'ok')
+
     if (state.catalog.length > 0) {
       state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
-      $('scanInfo').textContent = '✅ 已上架 ' + products.length + ' 筆  待上傳 ' + state.pending.length + ' 筆'
+      $('scanInfo').textContent = '✅ 已掃描 ' + summaryText + '  待上傳 ' + state.pending.length + ' 筆'
     } else {
-      $('scanInfo').textContent = '✅ 已掃描取得 ' + products.length + ' 筆已上架商品'
+      $('scanInfo').textContent = '✅ 已掃描 ' + summaryText
     }
     $('scanInfo').className = 'step-info ok'
     $('scanInfo').style.display = 'block'
@@ -167,7 +169,12 @@ $('fileInput').addEventListener('change', async (e) => {
     const text = await file.text()
     state.catalog = JSON.parse(text)
     state.pending = state.catalog.filter(item => !state.existingNames.has(item.ps_product_name))
-    $('fileInfo').textContent = '✅ 已載入 ' + state.catalog.length + ' 筆目錄（已避開上架 ' + state.existingNames.size + ' 筆，待上傳 ' + state.pending.length + ' 筆）'
+    const liveC = state.existingNames.size - (state.reviewCount || 0)
+    const summaryText = state.reviewCount > 0
+      ? `${state.existingNames.size} 筆 (${liveC} 筆已上架 + ${state.reviewCount} 筆審核中)`
+      : `${state.existingNames.size} 筆已上架`
+
+    $('fileInfo').textContent = '✅ 已載入 ' + state.catalog.length + ' 筆目錄（已對比 ' + summaryText + '，待上傳 ' + state.pending.length + ' 筆）'
     $('fileInfo').className = 'step-info ok'
     $('fileInfo').style.display = 'block'
     $('step3').style.display = 'block'
