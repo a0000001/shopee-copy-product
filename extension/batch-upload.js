@@ -340,7 +340,7 @@ async function waitForTTFB(tabId, timeout = 5000) {
 }
 
 async function fillAndSaveSingle(item, tabId) {
-  const OVERALL_DEADLINE_MS = 120000       // 120 秒絕對上限
+  const OVERALL_DEADLINE_MS = 60000        // 60 秒絕對上限
   const INACTIVITY_TIMEOUT_MS = 30000     // 30 秒無進度超時
   const MAX_NAV_RETRIES = 2
   const startedAt = Date.now()            // 絕對上限起算點
@@ -370,7 +370,7 @@ async function fillAndSaveSingle(item, tabId) {
       const inactivityElapsed = Date.now() - lastProgressAt
 
       if (totalElapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`文字填寫總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+        throw new Error(`文字填寫總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
       }
       if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
         throw new Error(`文字填寫長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
@@ -432,7 +432,7 @@ async function fillAndSaveSingle(item, tabId) {
         const inactivityElapsed = Date.now() - lastProgressAt
 
         if (totalElapsed > OVERALL_DEADLINE_MS) {
-          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
         }
         if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
           throw new Error(`媒體上傳長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
@@ -454,7 +454,7 @@ async function fillAndSaveSingle(item, tabId) {
     }
 
     lastProgressAt = Date.now()
-    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSave' })
+    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
     if (!saveStart || !saveStart.ok) throw new Error('無法發送儲存指令: ' + (saveStart?.error || '無回應'))
 
     let lastReason = '等待頁面跳轉'
@@ -463,7 +463,7 @@ async function fillAndSaveSingle(item, tabId) {
       const inactivityElapsed = Date.now() - lastProgressAt
 
       if (totalElapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
       }
       if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
         throw new Error(`儲存階段長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無頁面反應，判定異常卡死超時`)
@@ -471,10 +471,10 @@ async function fillAndSaveSingle(item, tabId) {
 
       await sleep(300)
 
-      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveStatus' })
-      if (checkResult && checkResult.status === 'done') {
+      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
+      if (checkResult && checkResult.ready) {
         const tabInfo = await chrome.tabs.get(tabId)
-        console.log('[SGC] Save status done, tab URL:', tabInfo.url)
+        console.log('[SGC] Save button ready, tab URL:', tabInfo.url)
         if (tabInfo.url && (tabInfo.url.includes('/portal/product/list') || tabInfo.url.includes('/portal/product/edit/'))) {
           return true
         }
