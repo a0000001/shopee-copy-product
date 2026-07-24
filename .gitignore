@@ -33,3 +33,6 @@ docs/data/product-catalog-upload_*.xlsx
 
 # Fixed template
 docs/shopee-official-tool/*_fixed.xlsx
+
+# 捷徑檔
+*.lnk
