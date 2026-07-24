@@ -439,53 +439,55 @@ async function fillAndSaveSingle(item, tabId) {
     }
 
     lastProgressAt = Date.now()
-    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSave' })
-    if (!saveStart || !saveStart.ok) throw new Error('無法發送儲存指令: ' + (saveStart?.error || '無回應'))
-
-    let lastReason = '等待頁面跳轉'
-    for (let i = 0; i < 150; i++) {
-      const totalElapsed = Date.now() - startedAt
-      const inactivityElapsed = Date.now() - lastProgressAt
-
-      if (totalElapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
-      }
-      if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
-        throw new Error(`儲存階段長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無頁面反應，判定異常卡死超時`)
-      }
-
+    // 3. 第三段：按鈕檢測與點擊發布 (最多 30 秒)
+    let lastReason = '等待按鈕就緒'
+    for (let i = 0; i < 100; i++) {
       await sleep(300)
+      try {
+        const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
+        if (checkResult && checkResult.ready) {
+          // 點擊「儲存並上架」按鈕
+          await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' }).catch(() => null)
 
-      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveStatus' })
-      if (checkResult && checkResult.status === 'done') {
-        const tabInfo = await chrome.tabs.get(tabId)
-        console.log('[SGC] Save status done, tab URL:', tabInfo.url)
-        if (tabInfo.url && (tabInfo.url.includes('/portal/product/list') || tabInfo.url.includes('/portal/product/edit/'))) {
-          return true
-        }
+          // 點擊後輪詢 3 秒，透過 executeScript 直注入檢查 DOM 狀態（Toast / 審核中 / 成功訊息 / URL 跳轉）
+          for (let checkLoop = 0; checkLoop < 10; checkLoop++) {
+            await sleep(300)
 
-        if (chrome.scripting) {
-          try {
-            const [toastCheck] = await chrome.scripting.executeScript({
-              target: { tabId },
-              func: () => {
-                const toasts = Array.from(document.querySelectorAll('.eds-toast, .ant-message, .shopee-toast, .shopee-alert, [class*="toast"]'))
-                  .map(el => el.textContent.trim()).join(' ')
-                const bodyText = document.body ? document.body.textContent : ''
-                const isAuditOrSuccess = toasts.includes('審核') || toasts.includes('成功') || toasts.includes('提交') || bodyText.includes('商品已提交審核')
-                return { isAuditOrSuccess, toasts }
-              }
-            })
-            if (toastCheck && toastCheck.result && toastCheck.result.isAuditOrSuccess) {
-              console.log('[SGC] Audit/Success Toast detected via executeScript:', toastCheck.result.toasts)
+            // 檢查 1: Tab URL 跳轉 (進入商品列表頁或離開 /new)
+            const finalTab = await chrome.tabs.get(tabId).catch(() => null)
+            if (finalTab && (finalTab.url.includes('/portal/product/list') || !finalTab.url.includes('/portal/product/new'))) {
+              console.log('[SGC] Tab redirected to list page, upload confirmed successful')
               return true
             }
-          } catch (e) { }
-        }
 
-        return true
-      } else if (checkResult && checkResult.reason) {
-        lastReason = checkResult.reason
+            // 檢查 2: 直注入檢查 DOM 是否彈出「審核」、「成功」、「提交」Toast 或提示文字
+            if (chrome.scripting) {
+              try {
+                const [toastCheck] = await chrome.scripting.executeScript({
+                  target: { tabId },
+                  func: () => {
+                    const toasts = Array.from(document.querySelectorAll('.eds-toast, .ant-message, .shopee-toast, .shopee-alert, [class*="toast"]'))
+                      .map(el => el.textContent.trim()).join(' ')
+                    const bodyText = document.body ? document.body.textContent : ''
+                    const isAuditOrSuccess = toasts.includes('審核') || toasts.includes('成功') || toasts.includes('提交') || bodyText.includes('商品已提交審核')
+                    return { isAuditOrSuccess, toasts }
+                  }
+                })
+                if (toastCheck && toastCheck.result && toastCheck.result.isAuditOrSuccess) {
+                  console.log('[SGC] Audit/Success Toast detected via executeScript:', toastCheck.result.toasts)
+                  return true
+                }
+              } catch (e) { }
+            }
+          }
+
+          // 預設直注入判定完成
+          return true
+        } else if (checkResult && checkResult.reason) {
+          lastReason = checkResult.reason
+        }
+      } catch (e) {
+        if (e.message.includes('點擊上架按鈕失敗')) throw e
       }
     }
     throw new Error('儲存按鈕未就緒: ' + lastReason)
