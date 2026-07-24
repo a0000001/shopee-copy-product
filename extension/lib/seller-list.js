@@ -104,7 +104,7 @@
                   productId: String(p.id || ""),
                   sku: p.parent_sku || "",
                   url: "",
-                  price: p.price_detail?.price_min || "",
+                  price: p.price_detail?.price_min ? String(Math.round(p.price_detail.price_min / 100000)) : "",
                   status: lt
                 })
               }
