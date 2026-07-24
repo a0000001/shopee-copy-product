@@ -4,6 +4,17 @@
 
 ## 2026-07-24
 
+### 修復與功能新增：Spec 048 賣家中心全量商品掃描、通用 Schema 自動校驗、WebP 轉碼與價格精確提取
+
+- `docs/spec/048-fix-賣家中心全量商品數量老是錯誤的修復與預防（seller_product_list_main_world_scan）.md` — ✨ **新增整合開發規範文件**：記錄全量商品 Main World API 跨頁輪詢與媒體圖片安定上傳之修復規範。
+- `scripts/verify-catalog-schema.js` — ✨ **新增通用 Schema 自動校驗腳本**：自動比對 `extension/*.js` 對 `item.xxx` 的屬性存取與 `product-catalog-tw.json` 的真實 Key，於 pre-commit 時自動攔截幻覺欄位。
+- `AGENTS.md` — 寫入通用行為鐵律：修改或新增欄位前，必須先開啟 `docs/data/product-catalog-tw.json` 檢視真實 Key，嚴禁憑記憶推測屬性名稱。
+- `extension/lib/media.js` — 🔥 **[修復] 影片 Modal 未自動關閉**：參考 `seller-fill.js` 套用 Modal 關閉 Pattern，於影片注入後自動點擊「確定」按鈕解鎖頁面；🔥 **[修復] File.type 歸一化**：優先使用 `mimeType` (`image/jpeg`) 封裝圖片檔案。
+- `extension/background.js` — 🔥 **[修復] WebP 圖片導致蝦皮表單報「不支援的檔案格式」**：復用背景頁既有 `toJpgDataUrl()` OffscreenCanvas 機制，將 WebP 圖片轉畫為標準 JPEG 格式。
+- `extension/lib/seller-list.js` — 🔥 **[修復] 賣家中心 API 價格放大 10 萬倍**：治本對齊 `extractor.js` 規範，將 `search_product_list` API 回傳的 `price_min` 原始微單位除以 100,000 換算為真實新台幣金額。
+- `extension/lib/seller-fill.js` — 🔥 **[修復] 折扣與原價數字拼串導致價格變千萬元**：升級價格解析為正則精確提取第一個特價數字（如 `$102 $129 7.9折` 提取出 `$102`）；補齊結尾 `}` 括號修復 `fillAll` 語法。
+- `extension/popup.html` & `extension/popup.js` — ✨ **新增：記憶型『自動儲存並上架』核選方塊**。連結 `chrome.storage.sync` (Key: `autoSaveOnFill`) 持久化記憶，於手動單件「從剪貼簿填入」完成後自動觸發「儲存並上架」發布。
+
 ### 修復：重複商品過濾標準化 (NFKC) 與 1800ms 填寫即時預檢中斷 (045 spec)
 
 - `docs/data/product-catalog-tw.json` — 清理 UTF-8 BOM (`\uFEFF`) 與 `ps_product_description` 中的不可見字元 (`\u00A0` 不換行空白、`\u200B` 零寬空白、`\u200C` 零寬不連字)，寫回 UTF-8 without BOM 格式。
