@@ -526,14 +526,26 @@ function initExtractMode(tab) {
       return
     }
     if (resp.error) {
-      showEmptyState({
-        title: '無法讀取商品資料',
-        desc: resp.error,
-        icon: '⚠️',
-        showShopeeBtn: true,
-        showReloadBtn: true,
-        tabId: tab.id
-      })
+      if (resp.errorCode === 'NOT_PRODUCT_PAGE') {
+        // 走錯頁面（店鋪/列表/搜尋頁）：引導前往商品詳情頁，重新整理無意義
+        showEmptyState({
+          title: '目前頁面不是蝦皮商品頁',
+          desc: '你目前在店鋪或列表頁，請點入任一商品詳情頁後再開啟外掛。',
+          icon: '🛒',
+          showShopeeBtn: true,
+          showReloadBtn: false
+        })
+      } else {
+        // 其他真正的讀取錯誤（errorCode 未知或未設定）
+        showEmptyState({
+          title: '無法讀取商品資料',
+          desc: resp.error,
+          icon: '⚠️',
+          showShopeeBtn: true,
+          showReloadBtn: true,
+          tabId: tab.id
+        })
+      }
       return
     }
     showData(resp)

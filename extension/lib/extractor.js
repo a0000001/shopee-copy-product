@@ -436,7 +436,7 @@
   }
 
   async function extractProductData() {
-    if (!isProductPage()) return { error: '不在商品頁面上' }
+    if (!isProductPage()) return { error: '不在商品頁面上', errorCode: 'NOT_PRODUCT_PAGE' }
 
     const ids = extractItemShopIds()
     let data = extractFromScripts()
