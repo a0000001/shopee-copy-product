@@ -233,6 +233,13 @@ async function fetchBlobAsBase64(url) {
   const resp = await fetch(url, { credentials: 'omit' })
   if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${url}`)
   const blob = await resp.blob()
+  if (blob.type === 'image/webp' || blob.type === 'image/x-webp') {
+    try {
+      const dataUrl = await toJpgDataUrl(url, false)
+      const base64 = dataUrl.split(',')[1]
+      return { base64, type: 'image/jpeg' }
+    } catch (e) { }
+  }
   const buffer = await blob.arrayBuffer()
   const bytes = new Uint8Array(buffer)
   let binary = ''

@@ -12,7 +12,7 @@
         }
         try {
           const base64 = response.data.base64
-          const type = response.data.type || mimeType || 'image/jpeg'
+          const type = mimeType || response.data.type || 'image/jpeg'
           if (skipPng && (type === 'image/png' || type === 'image/x-png')) {
             reject(new Error('SKIP_PNG'))
             return
