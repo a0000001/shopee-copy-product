@@ -423,31 +423,19 @@ async function fillAndSaveSingle(item, tabId) {
       if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳: ' + (mediaStart?.error || '無回應'))
 
       let mediaDone = false
-      let lastCompletedMediaCount = 0
-      for (let i = 0; i < 400; i++) {
-        const totalElapsed = Date.now() - startedAt
-        const inactivityElapsed = Date.now() - lastProgressAt
-
-        if (totalElapsed > OVERALL_DEADLINE_MS) {
-          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
-        }
-        if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
-          throw new Error(`媒體上傳長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
-        }
-
+      for (let i = 0; i < 200; i++) {
         await sleep(300)
-
-        const check = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
-        if (check && check.mediaProgress) {
-          if (check.mediaProgress.completed > lastCompletedMediaCount) {
-            lastCompletedMediaCount = check.mediaProgress.completed
-            lastProgressAt = Date.now()
+        try {
+          const st = await chrome.tabs.sendMessage(tabId, { action: 'checkMediaStatus' })
+          if (st && st.status === 'done') {
+            if (st.result && st.result.ok) { mediaDone = true; break }
+            else throw new Error((st.result && st.result.error) || '媒體上傳失敗')
           }
-          if (check.mediaProgress.done) { mediaDone = true; break }
-          if (check.mediaProgress.error) throw new Error('媒體上傳失敗: ' + check.mediaProgress.error)
+        } catch (e) {
+          if (e.message.includes('媒體上傳失敗')) throw e
         }
       }
-      if (!mediaDone) throw new Error('媒體上傳逾時未完成')
+      if (!mediaDone) throw new Error('媒體上傳超時 (60s)')
     }
 
     lastProgressAt = Date.now()
