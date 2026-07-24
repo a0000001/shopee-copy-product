@@ -13,8 +13,8 @@ if (!sellerListContent.includes('page_number') || !sellerListContent.includes('p
   errors.push('CRITICAL ERROR: seller-list.js is missing the page_number pagination loop!');
 }
 
-if (!batchUploadContent.includes('page_number') || !batchUploadContent.includes('pageNum')) {
-  errors.push('CRITICAL ERROR: batch-upload.js is missing the page_number pagination loop in scanProducts fallback!');
+if (!batchUploadContent.includes('executeScript') || !batchUploadContent.includes('page_number') || !batchUploadContent.includes('pageNum') || !batchUploadContent.includes('live_all')) {
+  errors.push('CRITICAL ERROR: batch-upload.js is missing the executeScript Main World page_number pagination loop!');
 }
 
 if (errors.length > 0) {
@@ -22,5 +22,5 @@ if (errors.length > 0) {
   errors.forEach(e => console.error(e));
   process.exit(1);
 } else {
-  console.log('✅ Verification passed: seller-list.js and batch-upload.js both preserve page_number pagination loop cleanly!');
+  console.log('✅ Verification passed: seller-list.js and batch-upload.js both preserve executeScript Main World page_number pagination loop cleanly!');
 }

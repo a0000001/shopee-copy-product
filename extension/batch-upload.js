@@ -108,7 +108,7 @@ async function scanProducts() {
     let liveCount = 0
     let reviewCount = 0
 
-    // 1. 第一步：先透過 sendMessage 取得全量商品
+    // 1. 第一步：先透過 sendMessage 嘗試呼叫 content script
     let domItems = null
     try {
       domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
@@ -116,7 +116,7 @@ async function scanProducts() {
       console.warn('[SGC] DOM sendMessage scan failed, using executeScript fallback:', e.message)
     }
 
-    // 2. 第二步：若 sendMessage 失敗，使用 executeScript 直注入全 API 頁籤分頁掃描與 SPA 備援
+    // 2. 第二步：使用 executeScript 主環境 (Main World) 直注入進行全頁籤與全頁面 API 分頁掃描 (Spec 048)
     if (!Array.isArray(domItems) || domItems.length === 0) {
       try {
         const [scriptRes] = await chrome.scripting.executeScript({

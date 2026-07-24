@@ -198,7 +198,7 @@
     if (!totalCount) return null
     const pageSize = 12
     const totalPages = Math.ceil(totalCount / pageSize)
-    const currentPage = parseInt((window.location.href.match(/[?&]page=(\d+)/) || [])[1] || "1")
+    const currentPage = parseInt((window.location.href.match(/(?:[?&])page=(\d+)/) || [])[1] || "1")
     return { totalCount, currentPage, totalPages, pageSize }
   }
 
