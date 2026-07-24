@@ -51,7 +51,7 @@ function sleep(ms) {
 
 async function waitForTabReady(tabId, timeout = 30000) {
   const startTime = Date.now()
-  
+
   // 1. 等待頁面基本 status complete
   let isComplete = false
   while (Date.now() - startTime < timeout) {
@@ -64,7 +64,7 @@ async function waitForTabReady(tabId, timeout = 30000) {
     } catch { }
     await sleep(200)
   }
-  
+
   if (!isComplete) throw new Error('分頁載入狀態逾時 (30s)')
 
   // 2. 主動 Ping Content Script 確保通訊已建立
@@ -80,7 +80,7 @@ async function waitForTabReady(tabId, timeout = 30000) {
     }
     await sleep(400)
   }
-  
+
   throw new Error('與蝦皮分頁通訊逾時 (Content Script 未啟動或遭阻擋)')
 }
 
@@ -138,31 +138,31 @@ async function scanProducts() {
             }
             function readTotal() {
               const t = document.body?.textContent || ''
-              const m = t.match(/總計\s*(\d+)\s*項/)||t.match(/共\s*(\d+)\s*筆/)||t.match(/(\d+)\s*件\s*商品/)||t.match(/架上商品\((\d+)\)/)
+              const m = t.match(/總計\s*(\d+)\s*項/) || t.match(/共\s*(\d+)\s*筆/) || t.match(/(\d+)\s*件\s*商品/) || t.match(/架上商品\((\d+)\)/)
               return m ? parseInt(m[1]) : 0
             }
             function clickNext() {
-              for (const s of ['.eds-pager__button-next','[class*="pager"] [class*="next"]','.eds-pagination__next button,.eds-pagination__next','[class*="pagination"] [class*="next"] button','button[class*="next"],a[class*="next"]','li.next a,li.next button,.ant-pagination-next']) {
+              for (const s of ['.eds-pager__button-next', '[class*="pager"] [class*="next"]', '.eds-pagination__next button,.eds-pagination__next', '[class*="pagination"] [class*="next"] button', 'button[class*="next"],a[class*="next"]', 'li.next a,li.next button,.ant-pagination-next']) {
                 const e = document.querySelector(s)
                 if (!e) continue
-                if (e.disabled||e.classList.contains('disabled')||e.getAttribute('aria-disabled')==='true') return false
+                if (e.disabled || e.classList.contains('disabled') || e.getAttribute('aria-disabled') === 'true') return false
                 e.click(); return true
               }
               return false
             }
             function waitTable(t) {
-              const tb = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]')||document.querySelector('table')
-              if (!tb) return new Promise(r=>setTimeout(r,2000))
-              return new Promise(r=>{let l=tb.innerHTML;const o=new MutationObserver(()=>{if(tb.innerHTML!==l){o.disconnect();setTimeout(r,400)}});o.observe(tb,{childList:true,subtree:true});setTimeout(()=>{o.disconnect();r()},t||6000)})
+              const tb = document.querySelector('.eds-table__body,table tbody,[class*="table__body"]') || document.querySelector('table')
+              if (!tb) return new Promise(r => setTimeout(r, 2000))
+              return new Promise(r => { let l = tb.innerHTML; const o = new MutationObserver(() => { if (tb.innerHTML !== l) { o.disconnect(); setTimeout(r, 400) } }); o.observe(tb, { childList: true, subtree: true }); setTimeout(() => { o.disconnect(); r() }, t || 6000) })
             }
 
-            const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
+            const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ''
             const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
             for (const lt of listTypes) {
               let pageNum = 1
               while (pageNum <= 20) {
                 try {
-                  const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=48&page_number=${pageNum}&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`,{credentials:'include'})
+                  const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=48&page_number=${pageNum}&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
                   if (r.ok) {
                     const json = await r.json()
                     const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
@@ -179,22 +179,22 @@ async function scanProducts() {
                   } else {
                     break
                   }
-                } catch(e) {
+                } catch (e) {
                   break
                 }
               }
             }
 
             collectDOM()
-            let cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
-            const MAX=50; let visited=0
-            while (visited<MAX) {
+            let cur = parseInt(new URL(location.href).searchParams.get('page') || '1')
+            const MAX = 50; let visited = 0
+            while (visited < MAX) {
               if (!clickNext()) break
               await waitTable()
-              const prev=items.length; collectDOM(); visited++
-              cur=parseInt(new URL(location.href).searchParams.get('page')||String(cur+1))
-              if (items.length===prev) break
-              const t=readTotal(); if(t>0&&items.length>=t) break
+              const prev = items.length; collectDOM(); visited++
+              cur = parseInt(new URL(location.href).searchParams.get('page') || String(cur + 1))
+              if (items.length === prev) break
+              const t = readTotal(); if (t > 0 && items.length >= t) break
             }
             return items
           }
@@ -324,7 +324,7 @@ async function waitForTTFB(tabId, timeout = 5000) {
     }
     const cleanup = () => {
       if (timer) clearTimeout(timer)
-      try { chrome.webRequest.onResponseStarted.removeListener(listener) } catch {}
+      try { chrome.webRequest.onResponseStarted.removeListener(listener) } catch { }
     }
     timer = setTimeout(() => {
       cleanup()
@@ -340,7 +340,7 @@ async function waitForTTFB(tabId, timeout = 5000) {
 }
 
 async function fillAndSaveSingle(item, tabId) {
-  const OVERALL_DEADLINE_MS = 60000        // 60 秒絕對上限
+  const OVERALL_DEADLINE_MS = 120000       // 120 秒絕對上限
   const INACTIVITY_TIMEOUT_MS = 30000     // 30 秒無進度超時
   const MAX_NAV_RETRIES = 2
   const startedAt = Date.now()            // 絕對上限起算點
@@ -370,7 +370,7 @@ async function fillAndSaveSingle(item, tabId) {
       const inactivityElapsed = Date.now() - lastProgressAt
 
       if (totalElapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`文字填寫總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
+        throw new Error(`文字填寫總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
       }
       if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
         throw new Error(`文字填寫長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
@@ -423,18 +423,35 @@ async function fillAndSaveSingle(item, tabId) {
       if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳: ' + (mediaStart?.error || '無回應'))
 
       let mediaDone = false
-      for (let i = 0; i < 200; i++) {
+      let lastCompletedMediaCount = 0
+      for (let i = 0; i < 400; i++) {
+        const totalElapsed = Date.now() - startedAt
+        const inactivityElapsed = Date.now() - lastProgressAt
+
+        if (totalElapsed > OVERALL_DEADLINE_MS) {
+          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+        }
+        if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
+          throw new Error(`媒體上傳長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
+        }
+
         await sleep(300)
+
         const check = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
         if (check && check.mediaProgress) {
+          if (check.mediaProgress.completed > lastCompletedMediaCount) {
+            lastCompletedMediaCount = check.mediaProgress.completed
+            lastProgressAt = Date.now()
+          }
           if (check.mediaProgress.done) { mediaDone = true; break }
           if (check.mediaProgress.error) throw new Error('媒體上傳失敗: ' + check.mediaProgress.error)
         }
       }
-      if (!mediaDone) throw new Error('媒體上傳逾時未完成 (60s)')
+      if (!mediaDone) throw new Error('媒體上傳逾時未完成')
     }
 
-    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
+    lastProgressAt = Date.now()
+    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSave' })
     if (!saveStart || !saveStart.ok) throw new Error('無法發送儲存指令: ' + (saveStart?.error || '無回應'))
 
     let lastReason = '等待頁面跳轉'
@@ -443,7 +460,7 @@ async function fillAndSaveSingle(item, tabId) {
       const inactivityElapsed = Date.now() - lastProgressAt
 
       if (totalElapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
+        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
       }
       if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
         throw new Error(`儲存階段長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無頁面反應，判定異常卡死超時`)
@@ -451,10 +468,10 @@ async function fillAndSaveSingle(item, tabId) {
 
       await sleep(300)
 
-      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
-      if (checkResult && checkResult.ready) {
+      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveStatus' })
+      if (checkResult && checkResult.status === 'done') {
         const tabInfo = await chrome.tabs.get(tabId)
-        console.log('[SGC] Save button ready, tab URL:', tabInfo.url)
+        console.log('[SGC] Save status done, tab URL:', tabInfo.url)
         if (tabInfo.url && (tabInfo.url.includes('/portal/product/list') || tabInfo.url.includes('/portal/product/edit/'))) {
           return true
         }
@@ -475,7 +492,7 @@ async function fillAndSaveSingle(item, tabId) {
               console.log('[SGC] Audit/Success Toast detected via executeScript:', toastCheck.result.toasts)
               return true
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         return true
@@ -613,8 +630,8 @@ $('btnStop').addEventListener('click', () => {
 $('btnCopyErrors').addEventListener('click', async () => {
   const failed = state.results.filter(r => !r.ok)
   let copyContent = `=== 蝦皮批次上傳診斷報告 (${new Date().toLocaleString()}) ===\n`
-  copyContent += `總計: ${state.results.length} 筆 | 成功: ${state.results.filter(r=>r.ok).length} 筆 | 失敗: ${failed.length} 筆\n\n`
-  
+  copyContent += `總計: ${state.results.length} 筆 | 成功: ${state.results.filter(r => r.ok).length} 筆 | 失敗: ${failed.length} 筆\n\n`
+
   if (failed.length > 0) {
     copyContent += `--- 失敗項目列表 ---\n`
     failed.forEach(r => {
