@@ -416,41 +416,22 @@ async function fillAndSaveSingle(item, tabId) {
     if (!fillDone) throw new Error('文字填寫逾時未完成')
     lastProgressAt = Date.now()
 
-    const hasMedia = (Array.isArray(item.images) && item.images.length > 0) || item.ps_item_cover_image
+    const hasMedia = (Array.isArray(item.images) && item.images.length > 0) || item.ps_item_cover_image || (Array.isArray(item.videos) && item.videos.length > 0)
     if (hasMedia) {
       console.log('[SGC] Starting media upload for:', item.ps_product_name)
-      const mediaStart = await chrome.tabs.sendMessage(tabId, {
-        action: 'uploadMedia',
-        data: item
-      })
+      const mediaStart = await chrome.tabs.sendMessage(tabId, { action: 'uploadMedia', data: item })
       if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳: ' + (mediaStart?.error || '無回應'))
 
       let mediaDone = false
-      let lastCompletedMediaCount = 0
       for (let i = 0; i < 200; i++) {
-        const totalElapsed = Date.now() - startedAt
-        const inactivityElapsed = Date.now() - lastProgressAt
-
-        if (totalElapsed > OVERALL_DEADLINE_MS) {
-          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 60s 絕對上限`)
-        }
-        if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
-          throw new Error(`媒體上傳長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
-        }
-
         await sleep(300)
-
         const check = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
         if (check && check.mediaProgress) {
-          if (check.mediaProgress.completed > lastCompletedMediaCount) {
-            lastCompletedMediaCount = check.mediaProgress.completed
-            lastProgressAt = Date.now()
-          }
           if (check.mediaProgress.done) { mediaDone = true; break }
           if (check.mediaProgress.error) throw new Error('媒體上傳失敗: ' + check.mediaProgress.error)
         }
       }
-      if (!mediaDone) throw new Error('媒體上傳逾時未完成')
+      if (!mediaDone) throw new Error('媒體上傳逾時未完成 (60s)')
     }
 
     const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
