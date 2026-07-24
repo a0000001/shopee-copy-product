@@ -108,7 +108,7 @@ async function scanProducts() {
     let liveCount = 0
     let reviewCount = 0
 
-    // 1. 第一步：先透過 sendMessage 取得穩定的架上 DOM 商品
+    // 1. 第一步：先透過 sendMessage 取得全量商品
     let domItems = null
     try {
       domItems = await chrome.tabs.sendMessage(sellerTab.id, { action: 'extractSellerProductList' })
@@ -116,6 +116,7 @@ async function scanProducts() {
       console.warn('[SGC] DOM sendMessage scan failed, using executeScript fallback:', e.message)
     }
 
+    // 2. 第二步：若 sendMessage 失敗，使用 executeScript 直注入全 API 頁籤分頁掃描與 SPA 備援
     if (!Array.isArray(domItems) || domItems.length === 0) {
       try {
         const [scriptRes] = await chrome.scripting.executeScript({
@@ -132,7 +133,7 @@ async function scanProducts() {
                 if (!name || nameSet.has(name)) continue
                 nameSet.add(name)
                 const idMatch = href.match(/\/portal\/product\/(\d+)/)
-                items.push({ name, productId: idMatch ? idMatch[1] : '' })
+                items.push({ name, productId: idMatch ? idMatch[1] : '', status: 'live' })
               }
             }
             function readTotal() {
@@ -156,13 +157,33 @@ async function scanProducts() {
             }
 
             const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-            try {
-              const r = await fetch('/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS='+encodeURIComponent(cds)+'&SPC_CDS_VER=2&page_size=100&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false',{credentials:'include'})
-              if (r.ok) {
-                const list = (await r.json())?.data?.products||[]
-                if (list.length>0) { for (const p of list) { const n=(p.name||'').trim(); if(n&&!nameSet.has(n)){nameSet.add(n);items.push({name:n,productId:String(p.id||'')})}}}
+            const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
+            for (const lt of listTypes) {
+              let pageNum = 1
+              while (pageNum <= 20) {
+                try {
+                  const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=48&page_number=${pageNum}&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`,{credentials:'include'})
+                  if (r.ok) {
+                    const json = await r.json()
+                    const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
+                    if (!Array.isArray(list) || list.length === 0) break
+                    for (const p of list) {
+                      const n = (p.name || '').trim()
+                      if (n && !nameSet.has(n)) {
+                        nameSet.add(n)
+                        items.push({ name: n, productId: String(p.id || ''), status: lt })
+                      }
+                    }
+                    if (list.length < 48) break
+                    pageNum++
+                  } else {
+                    break
+                  }
+                } catch(e) {
+                  break
+                }
               }
-            } catch(e) {}
+            }
 
             collectDOM()
             let cur=parseInt(new URL(location.href).searchParams.get('page')||'1')
@@ -189,57 +210,18 @@ async function scanProducts() {
     if (Array.isArray(domItems)) {
       for (const item of domItems) {
         const n = stripHashtag((item.name || '').trim())
-        if (n && !nameSet.has(n)) {
-          nameSet.add(n)
-          products.push({ ...item, name: n, status: 'live' })
-          liveCount++
-        }
-      }
-    }
-
-    // 2. 第二步：使用 executeScript 直注入 API 爬取 reviewing, unpublished, violation, banned 等頁籤
-    try {
-      const [scriptRes] = await chrome.scripting.executeScript({
-        target: { tabId: sellerTab.id },
-        func: async () => {
-          const apiItems = []
-          const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/)||[])[1]||''
-          const listTypes = ['reviewing', 'unpublished', 'violation', 'banned']
-          for (const lt of listTypes) {
-            try {
-              const r = await fetch(`/api/v3/opt/mpsku/list/v2/search_product_list?SPC_CDS=${encodeURIComponent(cds)}&SPC_CDS_VER=2&page_size=100&list_type=${lt}&request_attribute=&operation_sort_by=recommend_v4&need_ads=false`, { credentials: 'include' })
-              if (r.ok) {
-                const json = await r.json()
-                const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
-                for (const p of list) {
-                  const rawName = (p.name || '').trim()
-                  const idx = rawName.indexOf(' #')
-                  const n = idx >= 0 ? rawName.substring(0, idx).trim() : rawName
-                  if (n) apiItems.push({ name: n, productId: String(p.id || ''), status: lt })
-                }
-              }
-            } catch (e) {}
-          }
-          return apiItems
-        }
-      })
-
-      if (scriptRes && scriptRes.result && Array.isArray(scriptRes.result)) {
-        for (const item of scriptRes.result) {
-          const n = stripHashtag((item.name || '').trim())
-          if (n) {
-            if (!nameSet.has(n)) {
-              nameSet.add(n)
-              products.push({ ...item, name: n })
-            }
+        if (n) {
+          if (!nameSet.has(n)) {
+            nameSet.add(n)
+            products.push({ ...item, name: n })
             if (item.status === 'reviewing' || item.status === 'banned') {
               reviewCount++
+            } else {
+              liveCount++
             }
           }
         }
       }
-    } catch (e) {
-      console.warn('[SGC] API reviewing scan failed:', e.message)
     }
 
     if (!products || products.length === 0) {

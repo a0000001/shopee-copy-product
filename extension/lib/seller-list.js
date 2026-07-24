@@ -18,6 +18,7 @@
           sku: '',
           url: a.href || '',
           price: '',
+          status: 'live'
         })
       }
       return n
@@ -76,38 +77,59 @@
 
     collectFromDOM()
     let total = readTotal()
-    let pages = Math.ceil(total / 12)
-    let curPage = parseInt(new URL(location.href).searchParams.get("page") || "1")
 
     const cds = (document.cookie.match(/(?:^|;\s*)SPC_CDS=([^;]+)/) || [])[1] || ""
-    const realApiUrl = "/api/v3/opt/mpsku/list/v2/search_product_list"
-      + "?SPC_CDS=" + encodeURIComponent(cds)
-      + "&SPC_CDS_VER=2&page_size=48&list_type=live_all&request_attribute=&operation_sort_by=recommend_v4&need_ads=false"
-    try {
-      const res = await fetch(realApiUrl, { credentials: "include" })
-      if (res.ok) {
-        const json = await res.json()
-        const list = json?.data?.products || []
-        const beforeApi = items.length
-        if (Array.isArray(list) && list.length > 0) {
-          for (const p of list) {
-            const name = (p.name || "").trim()
-            if (name && !nameSet.has(name)) {
-              nameSet.add(name)
-              items.push({ name, productId: String(p.id || ""), sku: p.parent_sku || "", url: "", price: p.price_detail?.price_min || "" })
-            }
-          }
-        }
-        console.log("[SGC] API " + res.status + ": " + list.length + " items, " + (items.length - beforeApi) + " new")
-      } else {
-        console.log("[SGC] API HTTP " + res.status + ", falling back to SPA pagination")
-      }
-    } catch (e) { console.log("[SGC] API error: " + e.message) }
+    const listTypes = ['live_all', 'reviewing', 'unpublished', 'violation', 'banned']
+    const beforeApiCount = items.length
 
+    for (const lt of listTypes) {
+      let pageNum = 1
+      while (pageNum <= 20) {
+        const realApiUrl = "/api/v3/opt/mpsku/list/v2/search_product_list"
+          + "?SPC_CDS=" + encodeURIComponent(cds)
+          + "&SPC_CDS_VER=2&page_size=48&page_number=" + pageNum
+          + "&list_type=" + lt + "&request_attribute=&operation_sort_by=recommend_v4&need_ads=false"
+        try {
+          const res = await fetch(realApiUrl, { credentials: "include" })
+          if (res.ok) {
+            const json = await res.json()
+            const list = json?.data?.products || json?.data?.product_list || json?.data?.list || []
+            if (!Array.isArray(list) || list.length === 0) break
+            for (const p of list) {
+              const name = (p.name || "").trim()
+              if (name && !nameSet.has(name)) {
+                nameSet.add(name)
+                items.push({
+                  name,
+                  productId: String(p.id || ""),
+                  sku: p.parent_sku || "",
+                  url: "",
+                  price: p.price_detail?.price_min || "",
+                  status: lt
+                })
+              }
+            }
+            if (list.length < 48) break
+            pageNum++
+          } else {
+            break
+          }
+        } catch (e) {
+          console.log("[SGC] API error for " + lt + " page " + pageNum + ": " + e.message)
+          break
+        }
+      }
+    }
+
+    console.log("[SGC] API scan completed: +" + (items.length - beforeApiCount) + " items added. Total collected: " + items.length)
+
+    // SPA fallback pagination if API failed or total in DOM is greater
     console.log("[SGC] SPA pagination start (" + items.length + " collected so far, total=" + total + ")")
     const MAX_PAGES = 50
     let pagesVisited = 0
     let consecutiveNoNew = 0
+    let curPage = parseInt(new URL(location.href).searchParams.get("page") || "1")
+
     while (pagesVisited < MAX_PAGES) {
       const t = readTotal() || total
       if (t > 0 && items.length >= t) { console.log("[SGC] Reached total count " + t + ", SPA done"); break }
@@ -145,7 +167,7 @@
         const name = nameLink.textContent.trim()
         if (!name || name === "新增商品" || name === "修改" || nameSet.has(name)) continue
         nameSet.add(name)
-        items.push({ name, productId: "", sku: "", url: "", price: "" })
+        items.push({ name, productId: "", sku: "", url: "", price: "", status: "live" })
       }
     }
 
