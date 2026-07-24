@@ -684,6 +684,8 @@
         console.error('[SGC] Media upload error:', e)
         results.push({ field: '媒體上傳', ok: false, error: e.message })
       }
+    }
+
     if (data.autoSave) {
       console.log('[SGC] Auto-save requested, finding and clicking save button...')
       await new Promise(r => setTimeout(r, 600))
