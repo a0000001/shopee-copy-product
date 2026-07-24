@@ -416,18 +416,18 @@ async function fillAndSaveSingle(item, tabId) {
     if (!fillDone) throw new Error('文字填寫逾時未完成')
     lastProgressAt = Date.now()
 
-    if (item.ps_product_media && item.ps_product_media.length > 0) {
-      console.log('[SGC] Starting media upload for:', item.ps_product_media.length, 'files')
+    const hasMedia = (Array.isArray(item.images) && item.images.length > 0) || item.ps_item_cover_image
+    if (hasMedia) {
+      console.log('[SGC] Starting media upload for:', item.ps_product_name)
       const mediaStart = await chrome.tabs.sendMessage(tabId, {
         action: 'uploadMedia',
-        media: item.ps_product_media,
-        _config: state.config
+        data: item
       })
       if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳: ' + (mediaStart?.error || '無回應'))
 
       let mediaDone = false
       let lastCompletedMediaCount = 0
-      for (let i = 0; i < 400; i++) {
+      for (let i = 0; i < 200; i++) {
         const totalElapsed = Date.now() - startedAt
         const inactivityElapsed = Date.now() - lastProgressAt
 
@@ -453,7 +453,6 @@ async function fillAndSaveSingle(item, tabId) {
       if (!mediaDone) throw new Error('媒體上傳逾時未完成')
     }
 
-    lastProgressAt = Date.now()
     const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' })
     if (!saveStart || !saveStart.ok) throw new Error('無法發送儲存指令: ' + (saveStart?.error || '無回應'))
 
