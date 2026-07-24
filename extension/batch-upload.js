@@ -331,10 +331,38 @@ $('btnTestScan')?.addEventListener('click', () => {
 scanProducts()
 
 // ── 步驟 3：兩段式 Fire-and-Forget 上傳單件商品 ──
+async function waitForTTFB(tabId, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    let timer = null
+    const listener = (details) => {
+      if (details.tabId === tabId && details.type === 'main_frame') {
+        cleanup()
+        resolve(true)
+      }
+    }
+    const cleanup = () => {
+      if (timer) clearTimeout(timer)
+      try { chrome.webRequest.onResponseStarted.removeListener(listener) } catch {}
+    }
+    timer = setTimeout(() => {
+      cleanup()
+      reject(new Error('伺服器連線超時 (No TTFB, 5s)'))
+    }, timeout)
+    try {
+      chrome.webRequest.onResponseStarted.addListener(listener, { urls: ['https://seller.shopee.tw/*'] })
+    } catch (e) {
+      cleanup()
+      resolve(true)
+    }
+  })
+}
+
 async function fillAndSaveSingle(item, tabId) {
-  const OVERALL_DEADLINE_MS = 60000
+  const OVERALL_DEADLINE_MS = 120000       // 120 秒絕對上限
+  const INACTIVITY_TIMEOUT_MS = 30000     // 30 秒無進度超時
   const MAX_NAV_RETRIES = 2
-  const startedAt = Date.now()
+  const startedAt = Date.now()            // 絕對上限起算點
+  let lastProgressAt = Date.now()         // 無進度倒數起算點 (有進度即重置)
   let navRetryCount = 0
   let sawRunning = false
   let navigationDetected = false
@@ -350,13 +378,22 @@ async function fillAndSaveSingle(item, tabId) {
     const fillStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, _config: state.config, skipMedia: true } })
     if (!fillStart || !fillStart.ok) throw new Error('無法啟動文字填寫')
     sawRunning = true
+    lastProgressAt = Date.now()
 
     let fillDone = false
-    for (let i = 0; i < 150; i++) {
-      const elapsed = Date.now() - startedAt
-      if (elapsed > OVERALL_DEADLINE_MS) {
-        throw new Error(`文字填寫總耗時超過 ${(elapsed / 1000).toFixed(1)}s，判定異常超時`)
+    let lastFilledCount = 0
+
+    for (let i = 0; i < 400; i++) {
+      const totalElapsed = Date.now() - startedAt
+      const inactivityElapsed = Date.now() - lastProgressAt
+
+      if (totalElapsed > OVERALL_DEADLINE_MS) {
+        throw new Error(`文字填寫總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
       }
+      if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
+        throw new Error(`文字填寫長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
+      }
+
       await sleep(300)
 
       if (navigationDetected) {
@@ -366,10 +403,10 @@ async function fillAndSaveSingle(item, tabId) {
         }
         console.warn(`[SGC] 偵測到真實導航（第 ${navRetryCount} 次），等待新頁面穩定後自動續傳`)
         await waitForTabReady(tabId)
-        
+
         const tabInfo = await chrome.tabs.get(tabId)
         if (!/\/portal\/product\/(new|edit)/.test(tabInfo.url || '')) {
-          throw new Error(`導航後分頁不在預期的商品編輯頁（實際: ${tabInfo.url}），可能登入已過期`)
+          throw new Error(`導航後分頁不在預期的商品編輯頁（實際: ${tabInfo.url}），可能登入過期`)
         }
 
         await sleep(800)
@@ -377,68 +414,90 @@ async function fillAndSaveSingle(item, tabId) {
         sawRunning = false
 
         const retryStart = await chrome.tabs.sendMessage(tabId, { action: 'fillProductData', data: { ...item, skipMedia: true } })
-        if (!retryStart || !retryStart.ok) throw new Error('導航後重新啟動文字填寫失敗')
+        if (!retryStart || !retryStart.ok) throw new Error('導航後無法重新啟動文字填寫')
         sawRunning = true
+        lastProgressAt = Date.now()
         continue
       }
 
-      try {
-        const st = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
-        if (st && st.status === 'done') {
-          if (st.result && st.result.ok) { fillDone = true; break }
-          else throw new Error((st.result && st.result.error) || '文字填寫失敗')
+      const check = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
+      if (check) {
+        if (check.filledCount && check.filledCount > lastFilledCount) {
+          lastFilledCount = check.filledCount
+          lastProgressAt = Date.now()
         }
-      } catch (e) {
-        throw e
+        if (check.status === 'done') { fillDone = true; break }
+        if (check.status === 'error') throw new Error(check.error || '文字填寫失敗')
       }
     }
-    if (!fillDone) throw new Error(`文字填寫超時 (${((Date.now() - startedAt) / 1000).toFixed(1)}s)`)
-  } finally {
-    chrome.tabs.onUpdated.removeListener(onUpdated)
-  }
 
-  // 2. 第二段：媒體上傳 (Fire-and-Forget)
-  const mediaStart = await chrome.tabs.sendMessage(tabId, { action: 'uploadMedia', data: item })
-  if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳')
+    if (!fillDone) throw new Error('文字填寫逾時未完成')
+    lastProgressAt = Date.now()
 
-  // 輪詢等待媒體上傳完成 (最多 60 秒)
-  let mediaDone = false
-  for (let i = 0; i < 200; i++) {
-    await sleep(300)
-    try {
-      const st = await chrome.tabs.sendMessage(tabId, { action: 'checkMediaStatus' })
-      if (st && st.status === 'done') {
-        if (st.result && st.result.ok) { mediaDone = true; break }
-        else throw new Error((st.result && st.result.error) || '媒體上傳失敗')
-      }
-    } catch (e) {
-      throw e
-    }
-  }
-  if (!mediaDone) throw new Error('媒體上傳超時 (60s)')
+    if (item.ps_product_media && item.ps_product_media.length > 0) {
+      console.log('[SGC] Starting media upload for:', item.ps_product_media.length, 'files')
+      const mediaStart = await chrome.tabs.sendMessage(tabId, {
+        action: 'uploadMedia',
+        media: item.ps_product_media,
+        _config: state.config
+      })
+      if (!mediaStart || !mediaStart.ok) throw new Error('無法啟動媒體上傳: ' + (mediaStart?.error || '無回應'))
 
-  // 3. 第三段：按鈕檢測與點擊發布 (最多 30 秒)
-  let lastReason = '等待按鈕就緒'
-  for (let i = 0; i < 100; i++) {
-    await sleep(300)
-    try {
-      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveButton' })
-      if (checkResult && checkResult.ready) {
-        // 點擊「儲存並上架」按鈕
-        await chrome.tabs.sendMessage(tabId, { action: 'clickSaveButton' }).catch(() => null)
-        
-        // 點擊後輪詢 3 秒，透過 executeScript 直注入檢查 DOM 狀態（Toast / 審核中 / 成功訊息 / URL 跳轉）
-        for (let checkLoop = 0; checkLoop < 10; checkLoop++) {
-          await sleep(300)
-          
-          // 檢查 1: Tab URL 跳轉 (進入商品列表頁或離開 /new)
-          const finalTab = await chrome.tabs.get(tabId).catch(() => null)
-          if (finalTab && (finalTab.url.includes('/portal/product/list') || !finalTab.url.includes('/portal/product/new'))) {
-            console.log('[SGC] Tab redirected to list page, upload confirmed successful')
-            return true
+      let mediaDone = false
+      let lastCompletedMediaCount = 0
+      for (let i = 0; i < 400; i++) {
+        const totalElapsed = Date.now() - startedAt
+        const inactivityElapsed = Date.now() - lastProgressAt
+
+        if (totalElapsed > OVERALL_DEADLINE_MS) {
+          throw new Error(`媒體上傳總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+        }
+        if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
+          throw new Error(`媒體上傳長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無任何進度，判定異常卡死超時`)
+        }
+
+        await sleep(300)
+
+        const check = await chrome.tabs.sendMessage(tabId, { action: 'checkFillStatus' })
+        if (check && check.mediaProgress) {
+          if (check.mediaProgress.completed > lastCompletedMediaCount) {
+            lastCompletedMediaCount = check.mediaProgress.completed
+            lastProgressAt = Date.now()
           }
+          if (check.mediaProgress.done) { mediaDone = true; break }
+          if (check.mediaProgress.error) throw new Error('媒體上傳失敗: ' + check.mediaProgress.error)
+        }
+      }
+      if (!mediaDone) throw new Error('媒體上傳逾時未完成')
+    }
 
-          // 檢查 2: 直注入檢查 DOM 是否彈出「審核」、「成功」、「提交」Toast 或提示文字
+    lastProgressAt = Date.now()
+    const saveStart = await chrome.tabs.sendMessage(tabId, { action: 'clickSave' })
+    if (!saveStart || !saveStart.ok) throw new Error('無法發送儲存指令: ' + (saveStart?.error || '無回應'))
+
+    let lastReason = '等待頁面跳轉'
+    for (let i = 0; i < 150; i++) {
+      const totalElapsed = Date.now() - startedAt
+      const inactivityElapsed = Date.now() - lastProgressAt
+
+      if (totalElapsed > OVERALL_DEADLINE_MS) {
+        throw new Error(`儲存階段總耗時超過 ${(totalElapsed / 1000).toFixed(1)}s，達到 120s 絕對上限`)
+      }
+      if (inactivityElapsed > INACTIVITY_TIMEOUT_MS) {
+        throw new Error(`儲存階段長達 ${(inactivityElapsed / 1000).toFixed(1)}s 無頁面反應，判定異常卡死超時`)
+      }
+
+      await sleep(300)
+
+      const checkResult = await chrome.tabs.sendMessage(tabId, { action: 'checkSaveStatus' })
+      if (checkResult && checkResult.status === 'done') {
+        const tabInfo = await chrome.tabs.get(tabId)
+        console.log('[SGC] Save status done, tab URL:', tabInfo.url)
+        if (tabInfo.url && (tabInfo.url.includes('/portal/product/list') || tabInfo.url.includes('/portal/product/edit/'))) {
+          return true
+        }
+
+        if (chrome.scripting) {
           try {
             const [toastCheck] = await chrome.scripting.executeScript({
               target: { tabId },
@@ -457,16 +516,15 @@ async function fillAndSaveSingle(item, tabId) {
           } catch (e) {}
         }
 
-        // 預設直注入判定完成
         return true
       } else if (checkResult && checkResult.reason) {
         lastReason = checkResult.reason
       }
-    } catch (e) {
-      if (e.message.includes('點擊上架按鈕失敗')) throw e
     }
+    throw new Error('儲存按鈕未就緒: ' + lastReason)
+  } finally {
+    chrome.tabs.onUpdated.removeListener(onUpdated)
   }
-  throw new Error('儲存按鈕未就緒: ' + lastReason)
 }
 
 // ── 帶重試之單件上傳流程 ──
@@ -476,6 +534,7 @@ async function processItemWithRetry(item) {
     tab = await chrome.tabs.create({
       url: 'https://seller.shopee.tw/portal/product/new?from=sidebar',
     })
+    await waitForTTFB(tab.id, 5000)
     await waitForTabReady(tab.id)
     await fillAndSaveSingle(item, tab.id)
     return true

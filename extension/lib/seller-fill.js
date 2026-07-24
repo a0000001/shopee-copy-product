@@ -4,6 +4,7 @@
   }
 
   function setNativeValue(input, value) {
+    if (!input || !input.classList) return
     if (input.type === 'file') return
 
     if (input.classList.contains('ql-editor') || input.getAttribute('contenteditable') === 'true') {
@@ -127,7 +128,7 @@
         return { ok: true }
       }
     }
-    return { ok: false, error: '找不到欄位' }
+    return { ok: false, error: `找不到欄位 [頁面: ${location.pathname}, 標題: ${document.title}]` }
   }
 
   async function fillBrandAsync(brandName = 'NoBrand') {

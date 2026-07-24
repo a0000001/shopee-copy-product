@@ -12,7 +12,8 @@
     "contextMenus",
     "downloads",
     "storage",
-    "nativeMessaging"
+    "nativeMessaging",
+    "webRequest"
   ],
   "host_permissions": [
     "https://shopee.tw/*",

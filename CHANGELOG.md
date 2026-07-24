@@ -8,8 +8,10 @@
 
 - `docs/data/product-catalog-tw.json` — 清理 UTF-8 BOM (`\uFEFF`) 與 `ps_product_description` 中的不可見字元 (`\u00A0` 不換行空白、`\u200B` 零寬空白、`\u200C` 零寬不連字)，寫回 UTF-8 without BOM 格式。
 - `docs/spec/045-fix-重複商品過濾標準化與上傳早期預檢（dedup_filter_early_intercept）.md` — ✨ **新增開發規範文件**：記錄「重複商品過濾標準化 (NFKC)」與「上傳早期 1800ms 輪詢預檢 (無降級聲明)」之完整根因與修復計畫。
-- `extension/batch-upload.js` — 🔥 **實作 NFKC 標題標準化比對 (045 spec)**：引進 `normalizeTitle()` 先進行 `NFKC` 相容性分解（全形標點/英數轉半形），再剝離 Hashtag 與坍縮連續空白；更新 `isExistingProduct()` 為全半形相容比對；修正 `fillAndSaveSingle()` 中的例外傳遞與中斷捕捉機制。
-- `extension/lib/seller-fill.js` — 🔥 **實作 1800ms DOM 重複性即時預檢與嚴格報錯 (045 spec)**：在 `fillAll()` 填寫「商品名稱」後，先檢測 `[data-product-edit-field-unique-id="name"]` 容器是否存在（若找不到則依零降級原則拋出 `throw Error`）；輪詢 1800ms 檢查是否有蝦皮即時重複警告，若出現重複訊息立即中斷並拋出 Error，直接跳過後續 20~40 秒的圖片上傳步驟。
+- `docs/spec/047-fix-setNativeValue防護與動態超時寬容機制（dynamic_timeout_fill_diagnostics）.md` — ✨ **新增開發規範文件**：記錄 setNativeValue 防護、頁面診斷資訊、TTFB 健康檢查與動態進度超時寬容之規範。
+- `extension/manifest.json` — 新增 `"webRequest"` 權限支援分頁首位元組監聽。
+- `extension/lib/seller-fill.js` — 🔥 **[修復] setNativeValue 缺少空值防禦導致 TypeError**：加入 `input` 存在性檢查後即中止該欄位填寫；🔥 **[修復] 欄位填寫失敗錯誤訊息缺少頁面狀態**：於 `fillFieldAsync` 失敗回傳中附加 `pathname` 與 `document.title`。
+- `extension/batch-upload.js` — 🔥 **[修復] 缺少 TTFB 健康檢查導致伺服器無回應時仍死等 30 秒**：新增 `waitForTTFB` 5 秒 Fast-Fail 監聽；🔥 **[修復] 固定 60 秒總時限會誤殺仍有進度的填寫流程**：改為無進度倒數 30 秒搭配 120 秒絕對上限雙軌判斷。
 
 ## 2026-07-23
 
