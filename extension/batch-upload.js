@@ -26,11 +26,24 @@ const state = {
 const $ = id => document.getElementById(id)
 
 // ── 工具函數 ──
+function normalizeTitle(str) {
+  if (!str) return ''
+  return str
+    .normalize('NFKC')                          // 1. 先執行 NFKC (全形標點、全形井號＃、英數轉半形)
+    .replace(/[\uFEFF\u00A0\u200B\u200C]/g, '') // 2. 移除 BOM 與不可見控制空白
+    .replace(/\s*#.*/g, '')                      // 3. 剝離所有 Hashtag
+    .replace(/\s+/g, ' ')                        // 4. 坍縮連續空白為單一空白 (保留型號空格)
+    .trim()
+    .toLowerCase()
+}
+
 function stripHashtag(str) {
   if (!str) return ''
-  const idx = str.indexOf(' #')
-  return (idx >= 0 ? str.substring(0, idx) : str).trim()
+  const norm = str.normalize('NFKC').replace(/[\uFEFF\u00A0\u200B\u200C]/g, '')
+  const idx = norm.search(/\s*#/)
+  return (idx >= 0 ? norm.substring(0, idx) : norm).trim()
 }
+
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
@@ -264,20 +277,21 @@ async function scanProducts() {
 }
 
 function isExistingProduct(productName, existingNames) {
-  const cleanName = stripHashtag(productName || '')
-  if (!cleanName) return false
-  if (existingNames.has(cleanName)) return true
-
-  const truncName = cleanName.substring(0, 60).trim()
-  if (existingNames.has(truncName)) return true
+  const normName = normalizeTitle(productName || '')
+  if (!normName) return false
 
   for (const existing of existingNames) {
-    if (existing.length >= 45 && (cleanName.startsWith(existing) || existing.startsWith(cleanName))) {
+    const normExisting = normalizeTitle(existing)
+    if (!normExisting) continue
+    if (normName === normExisting) return true
+
+    if (normExisting.length >= 40 && (normName.startsWith(normExisting) || normExisting.startsWith(normName))) {
       return true
     }
   }
   return false
 }
+
 
 // ── 步驟 2：選擇商品目錄 JSON 檔案 ──
 $('fileInput').addEventListener('change', async (e) => {
@@ -375,7 +389,7 @@ async function fillAndSaveSingle(item, tabId) {
           else throw new Error((st.result && st.result.error) || '文字填寫失敗')
         }
       } catch (e) {
-        if (e.message.includes('文字填寫失敗')) throw e
+        throw e
       }
     }
     if (!fillDone) throw new Error(`文字填寫超時 (${((Date.now() - startedAt) / 1000).toFixed(1)}s)`)
@@ -398,7 +412,7 @@ async function fillAndSaveSingle(item, tabId) {
         else throw new Error((st.result && st.result.error) || '媒體上傳失敗')
       }
     } catch (e) {
-      if (e.message.includes('媒體上傳失敗')) throw e
+      throw e
     }
   }
   if (!mediaDone) throw new Error('媒體上傳超時 (60s)')

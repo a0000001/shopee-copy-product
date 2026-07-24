@@ -442,13 +442,36 @@
     }
 
     const title = buildTitle(data.ps_product_name, data.category, data.tag) || data.title || ''
-    results.push({
-      field: '商品名稱', ...(await fillFieldAsync(title,
-        () => findFieldByLabel('商品名稱'),
-        '[data-product-edit-field-unique-id="name"] input.eds-input__input',
-        'input[placeholder*="商品"]'
-      ))
-    })
+    const titleRes = await fillFieldAsync(title,
+      () => findFieldByLabel('商品名稱'),
+      '[data-product-edit-field-unique-id="name"] input.eds-input__input',
+      'input[placeholder*="商品"]'
+    )
+    results.push({ field: '商品名稱', ...titleRes })
+
+    if (!titleRes.ok) {
+      throw new Error('填寫商品名稱失敗：' + (titleRes.error || '找不到欄位'))
+    }
+
+    // 1. 檢查標題欄位容器是否存在 (若 Selector 改版找不到，依嚴格零降級原則拋出 Error)
+    const nameContainer = document.querySelector('[data-product-edit-field-unique-id="name"]') || document.querySelector('.edit-row')
+    if (!nameContainer) {
+      throw new Error('【環境異常/Selector失效】無法找到標題欄位 DOM 容器 [data-product-edit-field-unique-id="name"]，請檢查蝦皮頁面')
+    }
+
+    // 2. 輪詢檢查標題欄位下方是否出現蝦皮即時重複警告 (維持 1800ms，每 150ms 檢查一次)
+    const pollStart = Date.now()
+    while (Date.now() - pollStart < 1800) {
+      const titleErrorEl = nameContainer.querySelector('.eds-form-item__error-message, [class*="error"]')
+      if (titleErrorEl) {
+        const errorMsg = titleErrorEl.textContent.trim()
+        if (errorMsg && /重複|已存在|已被使用|already exists/i.test(errorMsg)) {
+          throw new Error('【即時預檢中斷】該商品名稱在蝦皮已存在：' + errorMsg)
+        }
+      }
+      await new Promise(r => setTimeout(r, 150))
+    }
+
     await randomJitter()
 
     try {

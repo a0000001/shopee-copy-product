@@ -2,6 +2,15 @@
 
 > 本文件記錄 Shopee Copy Product 所有歷史變更。2026-07-19 前之紀錄由原 repo (`S:\projects\shopee`) git history 遷移整理，commit hash 保留供交叉參考。
 
+## 2026-07-24
+
+### 修復：重複商品過濾標準化 (NFKC) 與 1800ms 填寫即時預檢中斷 (045 spec)
+
+- `docs/data/product-catalog-tw.json` — 清理 UTF-8 BOM (`\uFEFF`) 與 `ps_product_description` 中的不可見字元 (`\u00A0` 不換行空白、`\u200B` 零寬空白、`\u200C` 零寬不連字)，寫回 UTF-8 without BOM 格式。
+- `docs/spec/045-fix-重複商品過濾標準化與上傳早期預檢（dedup_filter_early_intercept）.md` — ✨ **新增開發規範文件**：記錄「重複商品過濾標準化 (NFKC)」與「上傳早期 1800ms 輪詢預檢 (無降級聲明)」之完整根因與修復計畫。
+- `extension/batch-upload.js` — 🔥 **實作 NFKC 標題標準化比對 (045 spec)**：引進 `normalizeTitle()` 先進行 `NFKC` 相容性分解（全形標點/英數轉半形），再剝離 Hashtag 與坍縮連續空白；更新 `isExistingProduct()` 為全半形相容比對；修正 `fillAndSaveSingle()` 中的例外傳遞與中斷捕捉機制。
+- `extension/lib/seller-fill.js` — 🔥 **實作 1800ms DOM 重複性即時預檢與嚴格報錯 (045 spec)**：在 `fillAll()` 填寫「商品名稱」後，先檢測 `[data-product-edit-field-unique-id="name"]` 容器是否存在（若找不到則依零降級原則拋出 `throw Error`）；輪詢 1800ms 檢查是否有蝦皮即時重複警告，若出現重複訊息立即中斷並拋出 Error，直接跳過後續 20~40 秒的圖片上傳步驟。
+
 ## 2026-07-23
 
 ### 重構與修復：content.js 模組化拆分為 6 元件（030 spec）與賣家商品清單全量翻頁修復
