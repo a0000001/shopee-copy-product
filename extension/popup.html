@@ -338,10 +338,163 @@
       color: #ee4d2d;
       font-weight: 600;
     }
+
+    /* 全流程導航列 */
+    .flow-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #888;
+      font-weight: 500;
+      user-select: none;
+    }
+
+    .flow-step.active {
+      color: #ee4d2d;
+      font-weight: 700;
+    }
+
+    .flow-step.clickable {
+      cursor: pointer;
+    }
+
+    .flow-step.clickable:hover {
+      color: #ee4d2d;
+      text-decoration: underline;
+    }
+
+    .step-num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      color: #666;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .flow-step.active .step-num {
+      background: #ee4d2d;
+      color: #fff;
+    }
+
+    .flow-arrow {
+      color: #ccc;
+      font-size: 11px;
+    }
+
+    /* 模式標籤徽章 */
+    .mode-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mode-badge.extract {
+      background: #e8f4ff;
+      color: #0066cc;
+      border: 1px solid #b3d7ff;
+    }
+
+    .mode-badge.seller {
+      background: #e6f7f3;
+      color: #26aa99;
+      border: 1px solid #a3e4d7;
+    }
+
+    /* 空白與引導狀態 */
+    .empty-state {
+      text-align: center;
+      padding: 20px 16px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px dashed #cccccc;
+      margin-bottom: 12px;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .empty-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .empty-desc {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .empty-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 
 <body>
+  <!-- 全流程可視化導航列 -->
+  <div id="flowHeader" class="flow-header">
+    <div class="flow-step" id="flowStep1" title="點擊在新分頁開啟商品頁 (↗)">
+      <span class="step-num">1</span>
+      <span class="step-text">擷取商品</span>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step" id="flowStep2">
+      <span class="step-num">2</span>
+      <span class="step-text">複製 JSON</span>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step" id="flowStep3">
+      <span class="step-num">3</span>
+      <span class="step-text">一鍵填入</span>
+    </div>
+  </div>
+
+  <!-- 模式標籤徽章 -->
+  <div id="modeBadge" class="mode-badge" style="display:none"></div>
+
+  <!-- 空白/引導狀態 (替代原冷冰冰的錯誤訊息) -->
+  <div id="emptyState" class="empty-state" style="display:none">
+    <div class="empty-icon" id="emptyIcon">ℹ️</div>
+    <div class="empty-title" id="emptyTitle">目前頁面不是蝦皮商品頁</div>
+    <div class="empty-desc" id="emptyDesc">請前往蝦皮購物商品頁面，或點擊下方按鈕前往。</div>
+    <div class="empty-actions" id="emptyActions">
+      <button id="btnGoShopee" class="btn-primary">去蝦皮購物逛逛 (↗)</button>
+      <button id="btnReloadTab" class="btn-secondary" style="display:none">重新整理此頁面</button>
+    </div>
+  </div>
+
   <div id="status" class="status">擷取中...</div>
   <div id="sellerUI" style="display:none">
     <div id="sellerModeLabel">📝 賣家編輯頁 — 填入模式</div>

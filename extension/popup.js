@@ -238,6 +238,90 @@ function showError(msg) {
   el.style.display = 'block'
 }
 
+function updateFlowHeader(activeStep) {
+  const step1 = $('flowStep1')
+  const step2 = $('flowStep2')
+  const step3 = $('flowStep3')
+
+  if (!step1 || !step2 || !step3) return
+
+  step1.classList.remove('active', 'clickable')
+  step2.classList.remove('active')
+  step3.classList.remove('active')
+
+  if (activeStep >= 1) step1.classList.add('active')
+  if (activeStep >= 2) step2.classList.add('active')
+  if (activeStep >= 3) step3.classList.add('active')
+
+  if (activeStep === 3) {
+    step1.classList.add('clickable')
+    step1.title = '點擊在新分頁開啟蝦皮商品頁 (↗)'
+    step1.onclick = () => {
+      chrome.tabs.create({ url: 'https://shopee.tw' })
+    }
+  } else {
+    step1.title = '步驟一：在商品頁擷取資料'
+    step1.onclick = null
+  }
+}
+
+function updateModeBadge(mode) {
+  const badge = $('modeBadge')
+  if (!badge) return
+
+  badge.style.display = 'flex'
+  if (mode === 'seller') {
+    document.body.style.backgroundColor = '#f0faf8'
+    badge.className = 'mode-badge seller'
+    badge.innerHTML = '<span>📝 賣家編輯頁 — 填入模式</span><span style="font-size:10px;font-weight:400;color:#26aa99">Step 3/3</span>'
+    try {
+      chrome.action.setBadgeText({ text: '✏️' })
+    } catch {}
+  } else {
+    document.body.style.backgroundColor = '#f8f9fa'
+    badge.className = 'mode-badge extract'
+    badge.innerHTML = '<span>🛒 商品頁 — 擷取模式</span><span style="font-size:10px;font-weight:400;color:#0066cc">Step 1/3</span>'
+    try {
+      chrome.action.setBadgeText({ text: 'SGC' })
+    } catch {}
+  }
+}
+
+function showEmptyState({ title, desc, icon = 'ℹ️', showShopeeBtn = true, showReloadBtn = false, tabId = null }) {
+  $('status').style.display = 'none'
+  $('result').style.display = 'none'
+  $('sellerUI').style.display = 'none'
+  $('error').style.display = 'none'
+
+  const emptyState = $('emptyState')
+  if (!emptyState) return
+
+  emptyState.style.display = 'block'
+  $('emptyIcon').textContent = icon
+  $('emptyTitle').textContent = title
+  $('emptyDesc').textContent = desc
+
+  const btnGoShopee = $('btnGoShopee')
+  const btnReloadTab = $('btnReloadTab')
+
+  if (btnGoShopee) {
+    btnGoShopee.style.display = showShopeeBtn ? 'inline-block' : 'none'
+    btnGoShopee.onclick = () => {
+      chrome.tabs.create({ url: 'https://shopee.tw' })
+    }
+  }
+
+  if (btnReloadTab) {
+    btnReloadTab.style.display = showReloadBtn ? 'inline-block' : 'none'
+    btnReloadTab.onclick = () => {
+      if (tabId) {
+        chrome.tabs.reload(tabId)
+        window.close()
+      }
+    }
+  }
+}
+
 function showData(data) {
   $('status').style.display = 'none'
   $('result').style.display = 'block'
@@ -269,6 +353,8 @@ function showData(data) {
 }
 
 function initSellerMode(tab) {
+  updateFlowHeader(3)
+  updateModeBadge('seller')
   $('status').style.display = 'none'
   $('sellerUI').style.display = 'block'
 
@@ -410,12 +496,54 @@ function toJsonClipboard(data) {
 }
 
 function initExtractMode(tab) {
+  updateFlowHeader(1)
+  updateModeBadge('extract')
+
+  const url = tab?.url || ''
+  if (!url.includes('shopee.tw')) {
+    showEmptyState({
+      title: '目前頁面不是蝦皮商品頁',
+      desc: '請前往蝦皮購物商品頁面，或點擊下方按鈕前往。',
+      icon: '🛒',
+      showShopeeBtn: true,
+      showReloadBtn: false
+    })
+    return
+  }
+
   chrome.tabs.sendMessage(tab.id, { action: 'getProductData' }).then(resp => {
-    if (!resp) { showError('內容腳本無回應，請重新整理頁面再試'); return }
-    if (resp.error) { showError(resp.error); return }
+    if (!resp) {
+      showEmptyState({
+        title: '內容腳本無回應',
+        desc: '內容腳本尚未載入或遭中斷，請嘗試重新整理頁面。',
+        icon: '🔄',
+        showShopeeBtn: false,
+        showReloadBtn: true,
+        tabId: tab.id
+      })
+      return
+    }
+    if (resp.error) {
+      showEmptyState({
+        title: '無法讀取商品資料',
+        desc: resp.error,
+        icon: '⚠️',
+        showShopeeBtn: true,
+        showReloadBtn: true,
+        tabId: tab.id
+      })
+      return
+    }
     showData(resp)
   }).catch(e => {
-    showError('通訊失敗：' + e.message)
+    showEmptyState({
+      title: '通訊失敗',
+      desc: '無法與頁面腳本連線：' + e.message + '。請重新整理頁面再試。',
+      icon: '⚠️',
+      showShopeeBtn: false,
+      showReloadBtn: true,
+      tabId: tab.id
+    })
   })
 
   $('btnCopy').addEventListener('click', async () => {
@@ -423,6 +551,7 @@ function initExtractMode(tab) {
     if (!data) { showToast('無資料'); return }
     try {
       await navigator.clipboard.writeText(toJsonClipboard(data))
+      updateFlowHeader(2)
     } catch (e) {
       showToast('複製失敗：' + e.message)
       return
