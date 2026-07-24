@@ -684,6 +684,26 @@
         console.error('[SGC] Media upload error:', e)
         results.push({ field: '媒體上傳', ok: false, error: e.message })
       }
+    if (data.autoSave) {
+      console.log('[SGC] Auto-save requested, finding and clicking save button...')
+      await new Promise(r => setTimeout(r, 600))
+      const saveBtn = findMainSaveButton()
+      if (saveBtn) {
+        const isDisabled = !!saveBtn.disabled || saveBtn.hasAttribute('disabled') || saveBtn.classList?.contains('eds-button--disabled')
+        if (!isDisabled) {
+          if (saveBtn.focus) saveBtn.focus()
+          const opts = { bubbles: true, cancelable: true, composed: true }
+          saveBtn.dispatchEvent(new MouseEvent('mousedown', opts))
+          saveBtn.dispatchEvent(new MouseEvent('mouseup', opts))
+          saveBtn.click()
+          console.log('[SGC] Auto-clicked save button after fillAll')
+          results.push({ field: '自動發布', ok: true, note: '已自動點擊儲存並上架' })
+        } else {
+          results.push({ field: '自動發布', ok: false, error: '「儲存並上架」按鈕處於停用狀態 (disabled)' })
+        }
+      } else {
+        results.push({ field: '自動發布', ok: false, error: '找不到「儲存並上架」按鈕' })
+      }
     }
 
     return { ok: true, results }

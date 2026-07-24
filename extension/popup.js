@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id)
 
 const DEFAULT_SERVER = 'http://localhost:9801'
 const STORAGE_KEY_AUTO_CATALOG = 'autoCatalogOnCopy'
+const STORAGE_KEY_AUTO_SAVE_ON_FILL = 'autoSaveOnFill'
 
 let _serverUrl = DEFAULT_SERVER
 
@@ -32,6 +33,34 @@ async function saveAutoCatalogSetting(checked) {
   try {
     await chrome.storage.sync.set({ [STORAGE_KEY_AUTO_CATALOG]: checked })
   } catch { }
+}
+
+async function loadAutoSaveSetting() {
+  try {
+    const result = await chrome.storage.sync.get(STORAGE_KEY_AUTO_SAVE_ON_FILL)
+    const checked = result[STORAGE_KEY_AUTO_SAVE_ON_FILL] === true
+    const chk = $('chkAutoSaveOnFill')
+    if (chk) {
+      chk.checked = checked
+      chk.parentElement.classList.toggle('checked', checked)
+    }
+  } catch { }
+}
+
+async function saveAutoSaveSetting(checked) {
+  try {
+    await chrome.storage.sync.set({ [STORAGE_KEY_AUTO_SAVE_ON_FILL]: checked })
+  } catch { }
+}
+
+function initAutoSaveCheckbox() {
+  const chk = $('chkAutoSaveOnFill')
+  if (!chk) return
+  chk.addEventListener('change', async () => {
+    const checked = chk.checked
+    chk.parentElement.classList.toggle('checked', checked)
+    await saveAutoSaveSetting(checked)
+  })
 }
 
 function initAutoCatalogCheckbox() {
@@ -266,9 +295,10 @@ function initSellerMode(tab) {
     $('fillResult').style.display = 'none'
 
     try {
+      const autoSave = $('chkAutoSaveOnFill')?.checked === true
       const started = await chrome.tabs.sendMessage(tab.id, {
         action: 'fillProductData',
-        data
+        data: { ...data, autoSave }
       })
       if (!started?.ok) throw new Error(started?.error || 'content script 無回應')
     } catch (e) {
@@ -445,8 +475,10 @@ function initExtractMode(tab) {
 async function main() {
   await loadServerUrl()
   await loadAutoCatalogSetting()
+  await loadAutoSaveSetting()
   updateServerStatus()
   initAutoCatalogCheckbox()
+  initAutoSaveCheckbox()
 
   $('btnServerToggle').addEventListener('click', onServerToggle)
   $('btnCloseError').addEventListener('click', hideErrorModal)
