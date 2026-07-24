@@ -249,9 +249,9 @@ function updateFlowHeader(activeStep) {
   step2.classList.remove('active')
   step3.classList.remove('active')
 
-  if (activeStep >= 1) step1.classList.add('active')
-  if (activeStep >= 2) step2.classList.add('active')
-  if (activeStep >= 3) step3.classList.add('active')
+  if (activeStep === 1) step1.classList.add('active')
+  if (activeStep === 2) step2.classList.add('active')
+  if (activeStep === 3) step3.classList.add('active')
 
   if (activeStep === 3) {
     step1.classList.add('clickable')
@@ -356,6 +356,8 @@ function initSellerMode(tab) {
   updateFlowHeader(3)
   updateModeBadge('seller')
   $('status').style.display = 'none'
+  const lbl = $('sellerModeLabel')
+  if (lbl) lbl.style.display = 'none' // modeBadge 已顯示相同訊息，避免重複
   $('sellerUI').style.display = 'block'
 
   $('btnFill').addEventListener('click', async () => {
