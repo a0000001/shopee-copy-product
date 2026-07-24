@@ -572,9 +572,8 @@
 
     const price = data.ps_price ?? data.price ?? ''
     let cleanPrice = ''
-    if (price != null && price !== '') {
-      cleanPrice = String(price).split('~')[0].split('-')[0].replace(/[^\d]/g, '').trim()
-    }
+      const firstPriceMatch = String(price).split('~')[0].split('-')[0].match(/(?:NT\$|\$)?\s*(\d+(?:,\d+)*)/)
+      cleanPrice = firstPriceMatch ? firstPriceMatch[1].replace(/,/g, '') : ''
 
     if (cleanPrice) {
       const priceRes = await fillFieldAsync(cleanPrice,
