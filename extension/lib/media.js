@@ -177,9 +177,24 @@
               targetInput.value = ''
               targetInput.files = dt.files
               targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }))
-              targetInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }))
-              targetInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }))
               console.log(`[SGC] Injected ${downloadedVideos.length} video(s)`)
+
+              // 參考 seller-fill.js 安定 Modal 關閉 Pattern：等待並自動點擊影片編輯 Modal 的確定/確認按鈕
+              for (let i = 0; i < 15; i++) {
+                await new Promise(r => setTimeout(r, 300))
+                const modal = document.querySelector('.eds-modal, .eds-dialog, [role="dialog"], [class*="modal"]')
+                if (modal) {
+                  const confirmBtn = Array.from(modal.querySelectorAll('button, .eds-button'))
+                    .find(b => b.classList.contains('eds-button--primary') || /確定|確認|儲存|Save|Confirm/.test(b.textContent || ''))
+                  if (confirmBtn) {
+                    confirmBtn.click()
+                    console.log('[SGC] Clicked video modal confirm button')
+                    await new Promise(r => setTimeout(r, 400))
+                    break
+                  }
+                }
+              }
+
               mediaResults.push({ field: '商品影片', ok: true, note: `成功注入 ${downloadedVideos.length} 部影片` })
             } catch (e) {
               mediaResults.push({ field: '商品影片', ok: false, error: `注入影片失敗: ${e.message}` })
